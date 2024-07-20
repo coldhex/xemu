@@ -82,6 +82,7 @@ typedef struct PshState {
     bool smooth_shading;
 } PshState;
 
-MString *psh_translate(const PshState state);
+MString *psh_translate(const PshState state,
+                       bool z_perspective);
 
 #endif

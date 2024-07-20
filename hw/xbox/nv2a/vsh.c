@@ -735,13 +735,12 @@ static const char* vsh_header =
     "#define RCC(dest, mask, src) dest.mask = _RCC(_in(src).x).mask\n"
     "vec4 _RCC(float src)\n"
     "{\n"
-    "  float t = 1.0 / src;\n"
-    "  if (t > 0.0) {\n"
-    "    t = clamp(t, 5.42101e-020, 1.884467e+019);\n"
+    "  if (src >= 0.0) {\n"
+    "    src = clamp(src, 5.421011e-20, 1.8446744e19);\n"
     "  } else {\n"
-    "    t = clamp(t, -1.884467e+019, -5.42101e-020);\n"
+    "    src = clamp(src, -1.8446744e19, -5.421011e-20);\n"
     "  }\n"
-    "  return vec4(t);\n"
+    "  return vec4(1.0 / src);\n"
     "}\n"
     "\n"
     "#define RSQ(dest, mask, src) dest.mask = _RSQ(_in(src).x).mask\n"
@@ -827,13 +826,17 @@ void vsh_translate(uint16_t version,
 
     /* pre-divide and output the generated W so we can do persepctive correct
      * interpolation manually. OpenGL can't, since we give it a W of 1 to work
-     * around the perspective divide */
+     * around the perspective divide.
+     * (Addendum: we no longer set W to 1.0, so we could get rid of this and
+     * let OpenGL do perspective-correct interpolation.)
+     */
     mstring_append(body,
-        "  if (oPos.w == 0.0 || isinf(oPos.w)) {\n"
-        "    vtx_inv_w = 1.0;\n"
+        "  if (oPos.w >= 0.0) {\n"
+        "    oPos.w = clamp(oPos.w, 5.421011e-20, 1.8446744e19);\n"
         "  } else {\n"
-        "    vtx_inv_w = 1.0 / oPos.w;\n"
+        "    oPos.w = clamp(oPos.w, -1.8446744e19, -5.421011e-20);\n"
         "  }\n"
+        "  vtx_inv_w = 1.0 / oPos.w;\n"
         "  vtx_inv_w_flat = vtx_inv_w;\n"
     );
 
@@ -845,24 +848,19 @@ void vsh_translate(uint16_t version,
         "  oPos.x = 2.0 * (oPos.x - surfaceSize.x * 0.5) / surfaceSize.x;\n"
         "  oPos.y = -2.0 * (oPos.y - surfaceSize.y * 0.5) / surfaceSize.y;\n"
     );
-    if (z_perspective) {
-        mstring_append(body, "  oPos.z = oPos.w;\n");
-    }
+
     mstring_append(body,
-        "  if (clipRange.y != clipRange.x) {\n"
-        "    oPos.z = (oPos.z - clipRange.x)/(0.5*(clipRange.y - clipRange.x)) - 1;\n"
-        "  }\n"
-
-        /* Correct for the perspective divide */
-        "  if (oPos.w < 0.0) {\n"
-            /* undo the perspective divide in the case where the point would be
-             * clipped so opengl can clip it correctly */
-        "    oPos.xyz *= oPos.w;\n"
-        "  } else {\n"
-            /* we don't want the OpenGL perspective divide to happen, but we
-             * can't multiply by W because it could be meaningless here */
-        "    oPos.w = 1.0;\n"
-        "  }\n"
+        "  oPos.z = (2.0*oPos.z - clipRange.y)/clipRange.y;\n"
+        /* Undo perspective divide by w. The OpenGL custom clip planes feature
+         * (gl_ClipDistance) used in pgraph.c and shaders.c require clip space
+         * coordinates to work right. We could additionally set e.g.
+         * "oPos.w = sign(oPos.w);" here if those custom clip planes were
+         * not needed. Note that games may also have vertex shaders that do
+         * not divide by w (such as 2D-graphics menus or overlays), but since
+         * OpenGL will later on divide by the same w, we get back the same
+         * screen space coordinates (perhaps with some loss of floating point
+         * precision, though.)
+         */
+        "  oPos.xyz *= oPos.w;\n"
     );
-
 }

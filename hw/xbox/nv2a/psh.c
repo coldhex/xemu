@@ -685,7 +685,8 @@ static void apply_border_adjustment(const struct PixelShader *ps, MString *vars,
         var_name, var_name, i, ps->state.border_inv_real_size[i][0], ps->state.border_inv_real_size[i][1], ps->state.border_inv_real_size[i][2]);
 }
 
-static MString* psh_convert(struct PixelShader *ps)
+static MString* psh_convert(struct PixelShader *ps,
+                            bool z_perspective)
 {
     int i;
 
@@ -1142,6 +1143,14 @@ static MString* psh_convert(struct PixelShader *ps)
         }
     }
 
+    if (z_perspective) {
+        mstring_append(preflight,
+            "uniform vec4 clipRange;\n"
+            "uniform float depthOffset;\n"
+        );
+        mstring_append(ps->code, "gl_FragDepth = (1.0/gl_FragCoord.w + depthOffset)/clipRange.y;\n");
+    }
+
     MString *final = mstring_new();
     mstring_append(final, "#version 330\n\n");
     mstring_append(final, mstring_get_str(preflight));
@@ -1190,7 +1199,8 @@ static void parse_combiner_output(uint32_t value, struct OutputInfo *out)
     out->cd_alphablue = flags & 0x40;
 }
 
-MString *psh_translate(const PshState state)
+MString *psh_translate(const PshState state,
+                       bool z_perspective)
 {
     int i;
     struct PixelShader ps;
@@ -1240,5 +1250,5 @@ MString *psh_translate(const PshState state)
         ps.final_input.inv_r0 = flags & PS_FINALCOMBINERSETTING_COMPLEMENT_R0;
     }
 
-    return psh_convert(&ps);
+    return psh_convert(&ps, z_perspective);
 }

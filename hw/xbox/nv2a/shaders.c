@@ -976,8 +976,8 @@ GLSL_DEFINE(texMat3, GLSL_C_MAT4(NV_IGRAPH_XF_XFCTX_T3MAT))
                       "  vtxT3 = oT3 * vtx_inv_w;\n"
                       "  gl_Position = oPos;\n"
                       "  gl_PointSize = oPts.x;\n"
-                      "  gl_ClipDistance[0] = oPos.z - oPos.w*clipRange.z;\n" // Near
-                      "  gl_ClipDistance[1] = oPos.w*clipRange.w - oPos.z;\n" // Far
+                      "  gl_ClipDistance[0] = oPos.w - clipRange.z;\n" // Near
+                      "  gl_ClipDistance[1] = clipRange.w - oPos.w;\n" // Far
                       "\n"
                       "}\n",
                        shade_model_mult,
@@ -1083,6 +1083,7 @@ void update_shader_constant_locations(ShaderBinding *binding, const ShaderState 
     }
     binding->surface_size_loc = glGetUniformLocation(binding->gl_program, "surfaceSize");
     binding->clip_range_loc = glGetUniformLocation(binding->gl_program, "clipRange");
+    binding->depth_offset_loc = glGetUniformLocation(binding->gl_program, "depthOffset");
     binding->fog_color_loc = glGetUniformLocation(binding->gl_program, "fogColor");
     binding->fog_param_loc[0] = glGetUniformLocation(binding->gl_program, "fogParam[0]");
     binding->fog_param_loc[1] = glGetUniformLocation(binding->gl_program, "fogParam[1]");
@@ -1166,7 +1167,7 @@ ShaderBinding *generate_shaders(const ShaderState *state)
     mstring_unref(vertex_shader_code);
 
     /* generate a fragment shader from register combiners */
-    MString *fragment_shader_code = psh_translate(state->psh);
+    MString *fragment_shader_code = psh_translate(state->psh, state->z_perspective);
     const char *fragment_shader_code_str =
         mstring_get_str(fragment_shader_code);
     GLuint fragment_shader = create_gl_shader(GL_FRAGMENT_SHADER,
