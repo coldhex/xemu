@@ -2842,6 +2842,7 @@ DEF_METHOD(NV097, SET_BEGIN_END)
     bool mask_blue = control_0 & NV_PGRAPH_CONTROL_0_BLUE_WRITE_ENABLE;
     bool color_write = mask_alpha || mask_red || mask_green || mask_blue;
     bool depth_test = control_0 & NV_PGRAPH_CONTROL_0_ZENABLE;
+    bool depth_mask = !!(control_0 & NV_PGRAPH_CONTROL_0_ZWRITEENABLE);
     bool stencil_test =
         pg->regs[NV_PGRAPH_CONTROL_1] & NV_PGRAPH_CONTROL_1_STENCIL_TEST_ENABLE;
     bool is_nop_draw = !(color_write || depth_test || stencil_test);
@@ -2904,7 +2905,7 @@ DEF_METHOD(NV097, SET_BEGIN_END)
         pgraph_bind_textures(d);
 
         glColorMask(mask_red, mask_green, mask_blue, mask_alpha);
-        glDepthMask(!!(control_0 & NV_PGRAPH_CONTROL_0_ZWRITEENABLE));
+        glDepthMask(depth_mask);
         glStencilMask(GET_MASK(pg->regs[NV_PGRAPH_CONTROL_1],
                                NV_PGRAPH_CONTROL_1_STENCIL_MASK_WRITE));
 
@@ -2984,6 +2985,8 @@ DEF_METHOD(NV097, SET_BEGIN_END)
 
         pgraph_bind_shaders(pg);
 
+        bool halo2_shadow_flicker_fix = false;
+
         /* Depth testing */
         if (depth_test) {
             glEnable(GL_DEPTH_TEST);
@@ -2991,7 +2994,11 @@ DEF_METHOD(NV097, SET_BEGIN_END)
             uint32_t depth_func = GET_MASK(pg->regs[NV_PGRAPH_CONTROL_0],
                                            NV_PGRAPH_CONTROL_0_ZFUNC);
             assert(depth_func < ARRAY_SIZE(pgraph_depth_func_map));
-            glDepthFunc(pgraph_depth_func_map[depth_func]);
+            GLenum func = pgraph_depth_func_map[depth_func];
+            if (!depth_mask && func == GL_EQUAL) {
+                halo2_shadow_flicker_fix = true;
+            }
+            glDepthFunc(func);
         } else {
             glDisable(GL_DEPTH_TEST);
             clip_planes_enabled = false;
@@ -3000,8 +3007,12 @@ DEF_METHOD(NV097, SET_BEGIN_END)
         if (GET_MASK(pg->regs[NV_PGRAPH_ZCOMPRESSOCCLUDE],
                      NV_PGRAPH_ZCOMPRESSOCCLUDE_ZCLAMP_EN) ==
             NV_PGRAPH_ZCOMPRESSOCCLUDE_ZCLAMP_EN_CLAMP) {
-            glEnable(GL_DEPTH_CLAMP);
-            clip_planes_enabled = false;
+            if (!halo2_shadow_flicker_fix) {
+                glEnable(GL_DEPTH_CLAMP);
+                clip_planes_enabled = false;
+            } else {
+                glDisable(GL_DEPTH_CLAMP);
+            }
         } else {
             glDisable(GL_DEPTH_CLAMP);
         }
