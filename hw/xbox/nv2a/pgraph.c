@@ -2978,6 +2978,7 @@ DEF_METHOD(NV097, SET_BEGIN_END)
             GLfloat zfactor = *(float*)&pg->regs[NV_PGRAPH_ZOFFSETFACTOR];
             GLfloat zbias = *(float*)&pg->regs[NV_PGRAPH_ZOFFSETBIAS];
             glPolygonOffset(zfactor, zbias);
+            // TODO: emulate zfactor when z_perspective true, i.e. w-buffering
             pg->fragment_depth_offset = zbias;
         } else {
             pg->fragment_depth_offset = 0.0f;
