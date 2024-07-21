@@ -269,8 +269,6 @@ static MString* generate_geometry_shader(
                        "  gl_PointSize = gl_in[index].gl_PointSize;\n"
                        "  gl_ClipDistance[0] = gl_in[index].gl_ClipDistance[0];\n"
                        "  gl_ClipDistance[1] = gl_in[index].gl_ClipDistance[1];\n"
-                       "  vtx_inv_w = v_vtx_inv_w[index];\n"
-                       "  vtx_inv_w_flat = v_vtx_inv_w[index];\n"
                        "  vtxD0 = v_vtxD0[index];\n"
                        "  vtxD1 = v_vtxD1[index];\n"
                        "  vtxB0 = v_vtxB0[index];\n"
@@ -293,8 +291,6 @@ static MString* generate_geometry_shader(
                        "  gl_PointSize = gl_in[index].gl_PointSize;\n"
                        "  gl_ClipDistance[0] = gl_in[index].gl_ClipDistance[0];\n"
                        "  gl_ClipDistance[1] = gl_in[index].gl_ClipDistance[1];\n"
-                       "  vtx_inv_w = v_vtx_inv_w[index];\n"
-                       "  vtx_inv_w_flat = v_vtx_inv_w[provoking_index];\n"
                        "  vtxD0 = v_vtxD0[provoking_index];\n"
                        "  vtxD1 = v_vtxD1[provoking_index];\n"
                        "  vtxB0 = v_vtxB0[provoking_index];\n"
@@ -771,14 +767,6 @@ GLSL_DEFINE(materialEmissionColor, GLSL_LTCTXA(NV_IGRAPH_XF_LTCTXA_CM_COL) ".xyz
         mstring_append_fmt(body, "  oPts.x = %f * %d;\n", state->point_size,
                            state->surface_scale_factor);
     }
-
-    mstring_append(body,
-                   "  if (oPos.w == 0.0 || isinf(oPos.w)) {\n"
-                   "    vtx_inv_w = 1.0;\n"
-                   "  } else {\n"
-                   "    vtx_inv_w = 1.0 / oPos.w;\n"
-                   "  }\n"
-                   "  vtx_inv_w_flat = vtx_inv_w;\n");
 }
 
 static MString *generate_vertex_shader(const ShaderState *state,
@@ -828,8 +816,6 @@ GLSL_DEFINE(texMat3, GLSL_C_MAT4(NV_IGRAPH_XF_XFCTX_T3MAT))
                                    STRUCT_V_VERTEX_DATA_OUT_SMOOTH :
                                    STRUCT_V_VERTEX_DATA_OUT_FLAT);
         mstring_append(header,
-                       "#define vtx_inv_w v_vtx_inv_w\n"
-                       "#define vtx_inv_w_flat v_vtx_inv_w_flat\n"
                        "#define vtxD0 v_vtxD0\n"
                        "#define vtxD1 v_vtxD1\n"
                        "#define vtxB0 v_vtxB0\n"
@@ -963,27 +949,23 @@ GLSL_DEFINE(texMat3, GLSL_C_MAT4(NV_IGRAPH_XF_XFCTX_T3MAT))
     }
 
     /* Set outputs */
-    const char *shade_model_mult = state->smooth_shading ? "vtx_inv_w" : "vtx_inv_w_flat";
     mstring_append_fmt(body, "\n"
-                      "  vtxD0 = clamp(oD0, 0.0, 1.0) * %s;\n"
-                      "  vtxD1 = clamp(oD1, 0.0, 1.0) * %s;\n"
-                      "  vtxB0 = clamp(oB0, 0.0, 1.0) * %s;\n"
-                      "  vtxB1 = clamp(oB1, 0.0, 1.0) * %s;\n"
-                      "  vtxFog = oFog.x * vtx_inv_w;\n"
-                      "  vtxT0 = oT0 * vtx_inv_w;\n"
-                      "  vtxT1 = oT1 * vtx_inv_w;\n"
-                      "  vtxT2 = oT2 * vtx_inv_w;\n"
-                      "  vtxT3 = oT3 * vtx_inv_w;\n"
+                      "  vtxD0 = clamp(oD0, 0.0, 1.0);\n"
+                      "  vtxD1 = clamp(oD1, 0.0, 1.0);\n"
+                      "  vtxB0 = clamp(oB0, 0.0, 1.0);\n"
+                      "  vtxB1 = clamp(oB1, 0.0, 1.0);\n"
+                      "  vtxFog = oFog.x;\n"
+                      "  vtxT0 = oT0;\n"
+                      "  vtxT1 = oT1;\n"
+                      "  vtxT2 = oT2;\n"
+                      "  vtxT3 = oT3;\n"
                       "  gl_Position = oPos;\n"
                       "  gl_PointSize = oPts.x;\n"
                       "  gl_ClipDistance[0] = oPos.w - clipRange.z;\n" // Near
                       "  gl_ClipDistance[1] = clipRange.w - oPos.w;\n" // Far
                       "\n"
-                      "}\n",
-                       shade_model_mult,
-                       shade_model_mult,
-                       shade_model_mult,
-                       shade_model_mult);
+                      "}\n"
+    );
 
 
     /* Return combined header + source */

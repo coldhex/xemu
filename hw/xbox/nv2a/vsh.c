@@ -824,20 +824,12 @@ void vsh_translate(uint16_t version,
     }
     assert(has_final);
 
-    /* pre-divide and output the generated W so we can do persepctive correct
-     * interpolation manually. OpenGL can't, since we give it a W of 1 to work
-     * around the perspective divide.
-     * (Addendum: we no longer set W to 1.0, so we could get rid of this and
-     * let OpenGL do perspective-correct interpolation.)
-     */
     mstring_append(body,
         "  if (oPos.w >= 0.0) {\n"
         "    oPos.w = clamp(oPos.w, 5.421011e-20, 1.8446744e19);\n"
         "  } else {\n"
         "    oPos.w = clamp(oPos.w, -1.8446744e19, -5.421011e-20);\n"
         "  }\n"
-        "  vtx_inv_w = 1.0 / oPos.w;\n"
-        "  vtx_inv_w_flat = vtx_inv_w;\n"
     );
 
     mstring_append(body,

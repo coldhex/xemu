@@ -24,27 +24,25 @@
 #include "debug.h"
 
 #define DEF_VERTEX_DATA(qualifier, in_out, prefix, suffix) \
-    "noperspective " in_out " float " prefix "vtx_inv_w" suffix ";\n" \
-    "flat " in_out " float " prefix "vtx_inv_w_flat" suffix ";\n" \
-    qualifier " " in_out " vec4 " prefix "vtxD0" suffix ";\n" \
-    qualifier " " in_out " vec4 " prefix "vtxD1" suffix ";\n" \
-    qualifier " " in_out " vec4 " prefix "vtxB0" suffix ";\n" \
-    qualifier " " in_out " vec4 " prefix "vtxB1" suffix ";\n" \
-    "noperspective " in_out " float " prefix "vtxFog" suffix ";\n" \
-    "noperspective " in_out " vec4 " prefix "vtxT0" suffix ";\n" \
-    "noperspective " in_out " vec4 " prefix "vtxT1" suffix ";\n" \
-    "noperspective " in_out " vec4 " prefix "vtxT2" suffix ";\n" \
-    "noperspective " in_out " vec4 " prefix "vtxT3" suffix ";\n"
+    qualifier in_out " vec4 " prefix "vtxD0" suffix ";\n" \
+    qualifier in_out " vec4 " prefix "vtxD1" suffix ";\n" \
+    qualifier in_out " vec4 " prefix "vtxB0" suffix ";\n" \
+    qualifier in_out " vec4 " prefix "vtxB1" suffix ";\n" \
+    in_out " float " prefix "vtxFog" suffix ";\n" \
+    in_out " vec4 " prefix "vtxT0" suffix ";\n" \
+    in_out " vec4 " prefix "vtxT1" suffix ";\n" \
+    in_out " vec4 " prefix "vtxT2" suffix ";\n" \
+    in_out " vec4 " prefix "vtxT3" suffix ";\n"
 
-#define STRUCT_VERTEX_DATA_OUT_SMOOTH DEF_VERTEX_DATA("noperspective", "out", "", "")
-#define STRUCT_VERTEX_DATA_IN_SMOOTH  DEF_VERTEX_DATA("noperspective", "in", "", "")
-#define STRUCT_V_VERTEX_DATA_OUT_SMOOTH DEF_VERTEX_DATA("noperspective", "out", "v_", "")
-#define STRUCT_V_VERTEX_DATA_IN_ARRAY_SMOOTH DEF_VERTEX_DATA("noperspective", "in", "v_", "[]")
+#define STRUCT_VERTEX_DATA_OUT_SMOOTH DEF_VERTEX_DATA("", "out", "", "")
+#define STRUCT_VERTEX_DATA_IN_SMOOTH  DEF_VERTEX_DATA("", "in", "", "")
+#define STRUCT_V_VERTEX_DATA_OUT_SMOOTH DEF_VERTEX_DATA("", "out", "v_", "")
+#define STRUCT_V_VERTEX_DATA_IN_ARRAY_SMOOTH DEF_VERTEX_DATA("", "in", "v_", "[]")
 
-#define STRUCT_VERTEX_DATA_OUT_FLAT DEF_VERTEX_DATA("flat", "out", "", "")
-#define STRUCT_VERTEX_DATA_IN_FLAT  DEF_VERTEX_DATA("flat", "in", "", "")
-#define STRUCT_V_VERTEX_DATA_OUT_FLAT DEF_VERTEX_DATA("flat", "out", "v_", "")
-#define STRUCT_V_VERTEX_DATA_IN_ARRAY_FLAT DEF_VERTEX_DATA("flat", "in", "v_", "[]")
+#define STRUCT_VERTEX_DATA_OUT_FLAT DEF_VERTEX_DATA("flat ", "out", "", "")
+#define STRUCT_VERTEX_DATA_IN_FLAT  DEF_VERTEX_DATA("flat ", "in", "", "")
+#define STRUCT_V_VERTEX_DATA_OUT_FLAT DEF_VERTEX_DATA("flat ", "out", "v_", "")
+#define STRUCT_V_VERTEX_DATA_IN_ARRAY_FLAT DEF_VERTEX_DATA("flat ", "in", "v_", "[]")
 
 typedef struct {
    int ref;
