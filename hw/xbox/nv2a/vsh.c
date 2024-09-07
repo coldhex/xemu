@@ -830,24 +830,16 @@ void vsh_translate(uint16_t version,
         "  } else {\n"
         "    oPos.w = clamp(oPos.w, -1.8446744e19, -5.421011e-20);\n"
         "  }\n"
-    );
 
-    mstring_append(body,
         /* the shaders leave the result in screen space, while
          * opengl expects it in clip space.
          * TODO: the pixel-center co-ordinate differences should handled
          */
         "  oPos.x = 2.0 * (oPos.x - surfaceSize.x * 0.5) / surfaceSize.x;\n"
         "  oPos.y = -2.0 * (oPos.y - surfaceSize.y * 0.5) / surfaceSize.y;\n"
-    );
 
-    mstring_append(body,
-        "  oPos.z = (2.0*oPos.z - clipRange.y)/clipRange.y;\n"
-        /* Undo perspective divide by w. The OpenGL custom clip planes feature
-         * (gl_ClipDistance) used in pgraph.c and shaders.c require clip space
-         * coordinates to work right. We could additionally set e.g.
-         * "oPos.w = sign(oPos.w);" here if those custom clip planes were
-         * not needed. Note that games may also have vertex shaders that do
+        /* Undo perspective divide by w.
+         * Note that games may also have vertex shaders that do
          * not divide by w (such as 2D-graphics menus or overlays), but since
          * OpenGL will later on divide by the same w, we get back the same
          * screen space coordinates (perhaps with some loss of floating point

@@ -750,7 +750,7 @@ GLSL_DEFINE(materialEmissionColor, GLSL_LTCTXA(NV_IGRAPH_XF_LTCTXA_CM_COL) ".xyz
 
     mstring_append(body,
     "   oPos = invViewport * (tPosition * compositeMat);\n"
-    "   oPos.z = oPos.z * 2.0 - oPos.w;\n");
+    );
 
     /* FIXME: Testing */
     if (state->point_params_enable) {
@@ -949,24 +949,33 @@ GLSL_DEFINE(texMat3, GLSL_C_MAT4(NV_IGRAPH_XF_XFCTX_T3MAT))
     }
 
     /* Set outputs */
-    mstring_append_fmt(body, "\n"
-                      "  vtxD0 = clamp(oD0, 0.0, 1.0);\n"
-                      "  vtxD1 = clamp(oD1, 0.0, 1.0);\n"
-                      "  vtxB0 = clamp(oB0, 0.0, 1.0);\n"
-                      "  vtxB1 = clamp(oB1, 0.0, 1.0);\n"
-                      "  vtxFog = oFog.x;\n"
-                      "  vtxT0 = oT0;\n"
-                      "  vtxT1 = oT1;\n"
-                      "  vtxT2 = oT2;\n"
-                      "  vtxT3 = oT3;\n"
-                      "  gl_Position = oPos;\n"
-                      "  gl_PointSize = oPts.x;\n"
-                      "  gl_ClipDistance[0] = oPos.w - clipRange.z;\n" // Near
-                      "  gl_ClipDistance[1] = clipRange.w - oPos.w;\n" // Far
-                      "\n"
-                      "}\n"
+    mstring_append(body, "\n"
+                   "  vtxD0 = clamp(oD0, 0.0, 1.0);\n"
+                   "  vtxD1 = clamp(oD1, 0.0, 1.0);\n"
+                   "  vtxB0 = clamp(oB0, 0.0, 1.0);\n"
+                   "  vtxB1 = clamp(oB1, 0.0, 1.0);\n"
+                   "  vtxFog = oFog.x;\n"
+                   "  vtxT0 = oT0;\n"
+                   "  vtxT1 = oT1;\n"
+                   "  vtxT2 = oT2;\n"
+                   "  vtxT3 = oT3;\n"
+                   "  gl_Position = vec4(oPos.x, oPos.y, 2.0*oPos.z/clipRange.y - oPos.w, oPos.w);\n"
+                   "  gl_PointSize = oPts.x;\n"
     );
 
+    if (state->z_perspective) {
+        mstring_append(body,
+                   "  gl_ClipDistance[0] = oPos.w - clipRange.z;\n" // Near
+                   "  gl_ClipDistance[1] = clipRange.w - oPos.w;\n" // Far
+        );
+    } else {
+        mstring_append(body,
+                   "  gl_ClipDistance[0] = oPos.z - clipRange.z*oPos.w;\n" // Near
+                   "  gl_ClipDistance[1] = clipRange.w*oPos.w - oPos.z;\n" // Far
+        );
+    }
+
+    mstring_append(body, "}\n");
 
     /* Return combined header + source */
     mstring_append(header, mstring_get_str(body));

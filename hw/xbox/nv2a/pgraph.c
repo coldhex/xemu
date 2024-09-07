@@ -2845,8 +2845,7 @@ DEF_METHOD(NV097, SET_BEGIN_END)
     bool stencil_test =
         pg->regs[NV_PGRAPH_CONTROL_1] & NV_PGRAPH_CONTROL_1_STENCIL_TEST_ENABLE;
     bool is_nop_draw = !(color_write || depth_test || stencil_test);
-    bool z_perspective = control_0 & NV_PGRAPH_CONTROL_0_Z_PERSPECTIVE_ENABLE;
-    bool clip_planes_enabled = z_perspective;
+    // bool z_perspective = control_0 & NV_PGRAPH_CONTROL_0_Z_PERSPECTIVE_ENABLE;
 
     if (parameter == NV097_SET_BEGIN_END_OP_END) {
         if (pg->primitive_mode == PRIM_TYPE_INVALID) {
@@ -2996,29 +2995,49 @@ DEF_METHOD(NV097, SET_BEGIN_END)
             glDepthFunc(pgraph_depth_func_map[depth_func]);
         } else {
             glDisable(GL_DEPTH_TEST);
-            clip_planes_enabled = false;
         }
 
+        glEnable(GL_DEPTH_CLAMP);
+
+        /* Clipping */
         if (GET_MASK(pg->regs[NV_PGRAPH_ZCOMPRESSOCCLUDE],
                      NV_PGRAPH_ZCOMPRESSOCCLUDE_ZCLAMP_EN) ==
             NV_PGRAPH_ZCOMPRESSOCCLUDE_ZCLAMP_EN_CLAMP) {
-            glEnable(GL_DEPTH_CLAMP);
-            clip_planes_enabled = false;
-        } else {
-            if (z_perspective) {
-                glEnable(GL_DEPTH_CLAMP);
-            } else {
-                glDisable(GL_DEPTH_CLAMP);
-            }
-        }
-
-        /* Clipping */
-        if (z_perspective && clip_planes_enabled) {
-            glEnable(GL_CLIP_DISTANCE0);
-            glEnable(GL_CLIP_DISTANCE1);
-        } else {
+            /* TODO: a real Xbox seems to clamp to the [NV_PGRAPH_ZCLIPMIN,
+             * NV_PGRAPH_ZCLIPMAX] range. It seems there is no other way to do
+             * this in OpenGL except clamp gl_FragDepth manually in the fragment
+             * shader. We already write gl_FragDepth in the case of w-buffering,
+             * so adding clamping should be simple. With z-buffering, we would
+             * need to use gl_FragDepth similarly. (Currently we are clamping
+             * to the [0, zmax] range regardless of the near/far clip planes.)
+             *
+             * FIXME: Halo 2 draws shadows (e.g. rock shadows in Beaver Creek)
+             * in a separate pass. First, grass is drawn with textured triangles
+             * with usual depth clipping enabled. Then, triangles with the exact
+             * same coordinates are drawn with a shadow texture map, depth buffer
+             * writing disabled and depth testing enabled with GL_EQUAL. For
+             * some reason, in Xemu (I don't know what happens with a real Xbox)
+             * this depth clamping here is enabled, so we should not clip.
+             * However, not clipping means the coordinates are not exactly the
+             * same anymore and GL_EQUAL depth testing does not always match
+             * exactly so the shadows can have flickering horizontal lines in
+             * them. This is actually not a problem in Halo 2 usually, because
+             * the viewing frustum sides will clip all there is to clip and
+             * there is nothing left to do for the near and far clip planes. The
+             * problem can be seen if Halo 2 default.xbe is modified such that
+             * the near clip plane is e.g. at w=16384.0 (instead of the usual
+             * 255.99). The flickering problem does not happen on a real Xbox,
+             * though. We could probably fix this in Xemu by not using the depth
+             * clip planes at all and instead clipping (by discarding fragments)
+             * in the fragment shader based on gl_FragDepth values. However,
+             * perhaps there is also some other Xemu bug causing depth clamping
+             * to be enabled for Halo 2 shadow drawing on the grass/ground?
+             */
             glDisable(GL_CLIP_DISTANCE0);
             glDisable(GL_CLIP_DISTANCE1);
+        } else {
+            glEnable(GL_CLIP_DISTANCE0);
+            glEnable(GL_CLIP_DISTANCE1);
         }
 
         if (GET_MASK(pg->regs[NV_PGRAPH_CONTROL_3],
@@ -4268,14 +4287,13 @@ static void pgraph_shader_update_constants(PGRAPHState *pg,
 
         float m11 = 0.5 * (pg->surface_binding_dim.width/aa_width);
         float m22 = -0.5 * (pg->surface_binding_dim.height/aa_height);
-        float m33 = zmax;
         float m41 = *(float*)&pg->vsh_constants[NV_IGRAPH_XF_XFCTX_VPOFF][0];
         float m42 = *(float*)&pg->vsh_constants[NV_IGRAPH_XF_XFCTX_VPOFF][1];
 
         float invViewport[16] = {
             1.0/m11, 0, 0, 0,
             0, 1.0/m22, 0, 0,
-            0, 0, 1.0/m33, 0,
+            0, 0, 1.0, 0,
             -1.0+m41/m11, 1.0+m42/m22, 0, 1.0
         };
 
