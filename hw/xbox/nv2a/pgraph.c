@@ -3004,12 +3004,15 @@ DEF_METHOD(NV097, SET_BEGIN_END)
                      NV_PGRAPH_ZCOMPRESSOCCLUDE_ZCLAMP_EN) ==
             NV_PGRAPH_ZCOMPRESSOCCLUDE_ZCLAMP_EN_CLAMP) {
             /* TODO: a real Xbox seems to clamp to the [NV_PGRAPH_ZCLIPMIN,
-             * NV_PGRAPH_ZCLIPMAX] range. It seems there is no other way to do
-             * this in OpenGL except clamp gl_FragDepth manually in the fragment
-             * shader. We already write gl_FragDepth in the case of w-buffering,
-             * so adding clamping should be simple. With z-buffering, we would
-             * need to use gl_FragDepth similarly. (Currently we are clamping
-             * to the [0, zmax] range regardless of the near/far clip planes.)
+             * NV_PGRAPH_ZCLIPMAX] range. With OpenGL we could clamp by writing
+             * appropriate gl_FragDepth in fragment shaders. In the case of
+             * w-buffering, we already write gl_FragDepth, so adding clamping
+             * should be simple. In the case of z-buffering, we could also go
+             * back to using the usual view frustum near/far clipping and not
+             * use the custom clip planes. Then we could fix the depth buffer
+             * values by setting glDepthRange(near, far) appropriately.
+             * (Current behaviour: we are clamping to the [0, zmax] range
+             * regardless of the near/far clip plane position.)
              *
              * FIXME: Halo 2 draws shadows (e.g. rock shadows in Beaver Creek)
              * in a separate pass. First, grass is drawn with textured triangles
