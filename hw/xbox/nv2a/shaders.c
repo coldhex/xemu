@@ -109,7 +109,8 @@ static MString* generate_geometry_shader(
                                       enum ShaderPolygonMode polygon_back_mode,
                                       enum ShaderPrimitiveMode primitive_mode,
                                       GLenum *gl_primitive_mode,
-                                      bool smooth_shading)
+                                      bool smooth_shading,
+                                      bool texture_perspective)
 {
     /* FIXME: Missing support for 2-sided-poly mode */
     assert(polygon_front_mode == polygon_back_mode);
@@ -259,10 +260,15 @@ static MString* generate_geometry_shader(
     mstring_append(s, layout_out);
     mstring_append(s, "\n");
     if (smooth_shading) {
-        mstring_append(s,
+        mstring_append(s, texture_perspective ?
                        STRUCT_V_VERTEX_DATA_IN_ARRAY_SMOOTH
                        "\n"
                        STRUCT_VERTEX_DATA_OUT_SMOOTH
+                       :
+                       STRUCT_V_VERTEX_DATA_IN_ARRAY_SMOOTH_NOPERS
+                       "\n"
+                       STRUCT_VERTEX_DATA_OUT_SMOOTH_NOPERS);
+        mstring_append(s,
                        "\n"
                        "void emit_vertex(int index, int _unused) {\n"
                        "  gl_Position = gl_in[index].gl_Position;\n"
@@ -281,10 +287,15 @@ static MString* generate_geometry_shader(
                        "  EmitVertex();\n"
                        "}\n");
     } else {
-        mstring_append(s,
+        mstring_append(s, texture_perspective ?
                        STRUCT_V_VERTEX_DATA_IN_ARRAY_FLAT
                        "\n"
                        STRUCT_VERTEX_DATA_OUT_FLAT
+                       :
+                       STRUCT_V_VERTEX_DATA_IN_ARRAY_FLAT_NOPERS
+                       "\n"
+                       STRUCT_VERTEX_DATA_OUT_FLAT_NOPERS);
+        mstring_append(s,
                        "\n"
                        "void emit_vertex(int index, int provoking_index) {\n"
                        "  gl_Position = gl_in[index].gl_Position;\n"
@@ -813,8 +824,12 @@ GLSL_DEFINE(texMat3, GLSL_C_MAT4(NV_IGRAPH_XF_XFCTX_T3MAT))
 "}\n");
     if (prefix_outputs) {
         mstring_append(header, state->smooth_shading ?
-                                   STRUCT_V_VERTEX_DATA_OUT_SMOOTH :
-                                   STRUCT_V_VERTEX_DATA_OUT_FLAT);
+                       (state->texture_perspective ?
+                        STRUCT_V_VERTEX_DATA_OUT_SMOOTH :
+                        STRUCT_V_VERTEX_DATA_OUT_SMOOTH_NOPERS) :
+                       (state->texture_perspective ?
+                        STRUCT_V_VERTEX_DATA_OUT_FLAT :
+                        STRUCT_V_VERTEX_DATA_OUT_FLAT_NOPERS));
         mstring_append(header,
                        "#define vtxD0 v_vtxD0\n"
                        "#define vtxD1 v_vtxD1\n"
@@ -828,8 +843,12 @@ GLSL_DEFINE(texMat3, GLSL_C_MAT4(NV_IGRAPH_XF_XFCTX_T3MAT))
                        );
     } else {
         mstring_append(header, state->smooth_shading ?
-                                   STRUCT_VERTEX_DATA_OUT_SMOOTH :
-                                   STRUCT_VERTEX_DATA_OUT_FLAT);
+                       (state->texture_perspective ?
+                        STRUCT_VERTEX_DATA_OUT_SMOOTH :
+                        STRUCT_VERTEX_DATA_OUT_SMOOTH_NOPERS) :
+                       (state->texture_perspective ?
+                        STRUCT_VERTEX_DATA_OUT_FLAT :
+                        STRUCT_VERTEX_DATA_OUT_FLAT_NOPERS));
     }
     mstring_append(header, "\n");
     for (i = 0; i < NV2A_VERTEXSHADER_ATTRIBUTES; i++) {
@@ -1137,7 +1156,8 @@ ShaderBinding *generate_shaders(const ShaderState *state)
                                  state->polygon_back_mode,
                                  state->primitive_mode,
                                  &gl_primitive_mode,
-                                 state->smooth_shading);
+                                 state->smooth_shading,
+                                 state->texture_perspective);
     if (geometry_shader_code) {
         const char* geometry_shader_code_str =
              mstring_get_str(geometry_shader_code);

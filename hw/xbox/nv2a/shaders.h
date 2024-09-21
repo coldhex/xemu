@@ -98,6 +98,7 @@ typedef struct ShaderState {
     float point_size;
     float point_params[8];
 
+    bool texture_perspective;
     bool smooth_shading;
 } ShaderState;
 

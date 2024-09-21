@@ -23,26 +23,36 @@
 
 #include "debug.h"
 
-#define DEF_VERTEX_DATA(qualifier, in_out, prefix, suffix) \
+#define DEF_VERTEX_DATA(qualifier, tex_qualifier, in_out, prefix, suffix) \
     qualifier in_out " vec4 " prefix "vtxD0" suffix ";\n" \
     qualifier in_out " vec4 " prefix "vtxD1" suffix ";\n" \
     qualifier in_out " vec4 " prefix "vtxB0" suffix ";\n" \
     qualifier in_out " vec4 " prefix "vtxB1" suffix ";\n" \
-    in_out " float " prefix "vtxFog" suffix ";\n" \
-    in_out " vec4 " prefix "vtxT0" suffix ";\n" \
-    in_out " vec4 " prefix "vtxT1" suffix ";\n" \
-    in_out " vec4 " prefix "vtxT2" suffix ";\n" \
-    in_out " vec4 " prefix "vtxT3" suffix ";\n"
+    tex_qualifier in_out " float " prefix "vtxFog" suffix ";\n" \
+    tex_qualifier in_out " vec4 " prefix "vtxT0" suffix ";\n" \
+    tex_qualifier in_out " vec4 " prefix "vtxT1" suffix ";\n" \
+    tex_qualifier in_out " vec4 " prefix "vtxT2" suffix ";\n" \
+    tex_qualifier in_out " vec4 " prefix "vtxT3" suffix ";\n"
 
-#define STRUCT_VERTEX_DATA_OUT_SMOOTH DEF_VERTEX_DATA("", "out", "", "")
-#define STRUCT_VERTEX_DATA_IN_SMOOTH  DEF_VERTEX_DATA("", "in", "", "")
-#define STRUCT_V_VERTEX_DATA_OUT_SMOOTH DEF_VERTEX_DATA("", "out", "v_", "")
-#define STRUCT_V_VERTEX_DATA_IN_ARRAY_SMOOTH DEF_VERTEX_DATA("", "in", "v_", "[]")
+#define STRUCT_VERTEX_DATA_OUT_SMOOTH DEF_VERTEX_DATA("", "", "out", "", "")
+#define STRUCT_VERTEX_DATA_IN_SMOOTH  DEF_VERTEX_DATA("", "", "in", "", "")
+#define STRUCT_V_VERTEX_DATA_OUT_SMOOTH DEF_VERTEX_DATA("", "", "out", "v_", "")
+#define STRUCT_V_VERTEX_DATA_IN_ARRAY_SMOOTH DEF_VERTEX_DATA("", "", "in", "v_", "[]")
 
-#define STRUCT_VERTEX_DATA_OUT_FLAT DEF_VERTEX_DATA("flat ", "out", "", "")
-#define STRUCT_VERTEX_DATA_IN_FLAT  DEF_VERTEX_DATA("flat ", "in", "", "")
-#define STRUCT_V_VERTEX_DATA_OUT_FLAT DEF_VERTEX_DATA("flat ", "out", "v_", "")
-#define STRUCT_V_VERTEX_DATA_IN_ARRAY_FLAT DEF_VERTEX_DATA("flat ", "in", "v_", "[]")
+#define STRUCT_VERTEX_DATA_OUT_SMOOTH_NOPERS DEF_VERTEX_DATA("noperspective ", "noperspective ", "out", "", "")
+#define STRUCT_VERTEX_DATA_IN_SMOOTH_NOPERS  DEF_VERTEX_DATA("noperspective ", "noperspective ", "in", "", "")
+#define STRUCT_V_VERTEX_DATA_OUT_SMOOTH_NOPERS DEF_VERTEX_DATA("noperspective ", "noperspective ", "out", "v_", "")
+#define STRUCT_V_VERTEX_DATA_IN_ARRAY_SMOOTH_NOPERS DEF_VERTEX_DATA("noperspective ", "noperspective ", "in", "v_", "[]")
+
+#define STRUCT_VERTEX_DATA_OUT_FLAT DEF_VERTEX_DATA("flat ", "", "out", "", "")
+#define STRUCT_VERTEX_DATA_IN_FLAT  DEF_VERTEX_DATA("flat ", "", "in", "", "")
+#define STRUCT_V_VERTEX_DATA_OUT_FLAT DEF_VERTEX_DATA("flat ", "", "out", "v_", "")
+#define STRUCT_V_VERTEX_DATA_IN_ARRAY_FLAT DEF_VERTEX_DATA("flat ", "", "in", "v_", "[]")
+
+#define STRUCT_VERTEX_DATA_OUT_FLAT_NOPERS DEF_VERTEX_DATA("flat ", "noperspective ", "out", "", "")
+#define STRUCT_VERTEX_DATA_IN_FLAT_NOPERS  DEF_VERTEX_DATA("flat ", "noperspective ", "in", "", "")
+#define STRUCT_V_VERTEX_DATA_OUT_FLAT_NOPERS DEF_VERTEX_DATA("flat ", "noperspective ", "out", "v_", "")
+#define STRUCT_V_VERTEX_DATA_IN_ARRAY_FLAT_NOPERS DEF_VERTEX_DATA("flat ", "noperspective ", "in", "v_", "[]")
 
 typedef struct {
    int ref;

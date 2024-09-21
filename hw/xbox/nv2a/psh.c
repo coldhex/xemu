@@ -692,8 +692,12 @@ static MString* psh_convert(struct PixelShader *ps,
 
     MString *preflight = mstring_new();
     mstring_append(preflight, ps->state.smooth_shading ?
-                                  STRUCT_VERTEX_DATA_IN_SMOOTH :
-                                  STRUCT_VERTEX_DATA_IN_FLAT);
+                   (ps->state.texture_perspective ?
+                    STRUCT_VERTEX_DATA_IN_SMOOTH :
+                    STRUCT_VERTEX_DATA_IN_SMOOTH_NOPERS) :
+                   (ps->state.texture_perspective ?
+                    STRUCT_VERTEX_DATA_IN_FLAT :
+                    STRUCT_VERTEX_DATA_IN_FLAT_NOPERS));
     mstring_append(preflight, "\n");
     mstring_append(preflight, "out vec4 fragColor;\n");
     mstring_append(preflight, "\n");

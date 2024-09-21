@@ -1444,6 +1444,12 @@ DEF_METHOD(NV097, SET_CONTROL0)
     SET_MASK(pg->regs[NV_PGRAPH_CONTROL_0],
              NV_PGRAPH_CONTROL_0_Z_PERSPECTIVE_ENABLE,
              z_perspective);
+
+    bool texture_perspective =
+        parameter & NV097_SET_CONTROL0_TEXTURE_PERSPECTIVE_ENABLE;
+    SET_MASK(pg->regs[NV_PGRAPH_CONTROL_3],
+             NV_PGRAPH_CONTROL_3_TEXTURE_PERSPECTIVE_ENABLE,
+             texture_perspective);
 }
 
 DEF_METHOD(NV097, SET_COLOR_MATERIAL)
@@ -4537,6 +4543,10 @@ static void pgraph_bind_shaders(PGRAPHState *pg)
                                                            NV_PGRAPH_SETUPRASTER_FRONTFACEMODE);
     state.polygon_back_mode = (enum ShaderPolygonMode)GET_MASK(pg->regs[NV_PGRAPH_SETUPRASTER],
                                                           NV_PGRAPH_SETUPRASTER_BACKFACEMODE);
+
+    state.texture_perspective = pg->regs[NV_PGRAPH_CONTROL_3]
+                              & NV_PGRAPH_CONTROL_3_TEXTURE_PERSPECTIVE_ENABLE;
+    state.psh.texture_perspective = state.texture_perspective;
 
     state.smooth_shading = GET_MASK(pg->regs[NV_PGRAPH_CONTROL_3],
                                       NV_PGRAPH_CONTROL_3_SHADEMODE) ==
