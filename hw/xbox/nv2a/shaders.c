@@ -857,7 +857,6 @@ GLSL_DEFINE(texMat3, GLSL_C_MAT4(NV_IGRAPH_XF_XFCTX_T3MAT))
         vsh_translate(VSH_VERSION_XVS,
                       (uint32_t*)state->program_data,
                       state->program_length,
-                      state->z_perspective,
                       header, body);
     } else {
         assert(false);
@@ -1158,7 +1157,7 @@ ShaderBinding *generate_shaders(const ShaderState *state)
     mstring_unref(vertex_shader_code);
 
     /* generate a fragment shader from register combiners */
-    MString *fragment_shader_code = psh_translate(state->psh, state->z_perspective);
+    MString *fragment_shader_code = psh_translate(state->psh);
     const char *fragment_shader_code_str =
         mstring_get_str(fragment_shader_code);
     GLuint fragment_shader = create_gl_shader(GL_FRAGMENT_SHADER,

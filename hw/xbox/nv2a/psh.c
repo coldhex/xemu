@@ -685,8 +685,7 @@ static void apply_border_adjustment(const struct PixelShader *ps, MString *vars,
         var_name, var_name, i, ps->state.border_inv_real_size[i][0], ps->state.border_inv_real_size[i][1], ps->state.border_inv_real_size[i][2]);
 }
 
-static MString* psh_convert(struct PixelShader *ps,
-                            bool z_perspective)
+static MString* psh_convert(struct PixelShader *ps)
 {
     int i;
 
@@ -1140,7 +1139,7 @@ static MString* psh_convert(struct PixelShader *ps,
         }
     }
 
-    if (z_perspective) {
+    if (ps->state.z_perspective) {
         mstring_append(preflight,
             "uniform vec4 clipRange;\n"
             "uniform float depthOffset;\n"
@@ -1196,8 +1195,7 @@ static void parse_combiner_output(uint32_t value, struct OutputInfo *out)
     out->cd_alphablue = flags & 0x40;
 }
 
-MString *psh_translate(const PshState state,
-                       bool z_perspective)
+MString *psh_translate(const PshState state)
 {
     int i;
     struct PixelShader ps;
@@ -1247,5 +1245,5 @@ MString *psh_translate(const PshState state,
         ps.final_input.inv_r0 = flags & PS_FINALCOMBINERSETTING_COMPLEMENT_R0;
     }
 
-    return psh_convert(&ps, z_perspective);
+    return psh_convert(&ps);
 }

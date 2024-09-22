@@ -4526,6 +4526,7 @@ static void pgraph_bind_shaders(PGRAPHState *pg)
     state.vertex_program = vertex_program;
     state.z_perspective = pg->regs[NV_PGRAPH_CONTROL_0]
                         & NV_PGRAPH_CONTROL_0_Z_PERSPECTIVE_ENABLE;
+    state.psh.z_perspective = state.z_perspective;
 
     state.point_params_enable = GET_MASK(pg->regs[NV_PGRAPH_CSV0_D],
                                          NV_PGRAPH_CSV0_D_POINTPARAMSENABLE);

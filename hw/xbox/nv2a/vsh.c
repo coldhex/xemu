@@ -796,7 +796,6 @@ static const char* vsh_header =
 void vsh_translate(uint16_t version,
                    const uint32_t *tokens,
                    unsigned int length,
-                   bool z_perspective,
                    MString *header, MString *body)
 {
 

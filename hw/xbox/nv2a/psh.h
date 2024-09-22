@@ -79,11 +79,11 @@ typedef struct PshState {
 
     bool window_clip_exclusive;
 
+    bool z_perspective;
     bool texture_perspective;
     bool smooth_shading;
 } PshState;
 
-MString *psh_translate(const PshState state,
-                       bool z_perspective);
+MString *psh_translate(const PshState state);
 
 #endif
