@@ -89,7 +89,7 @@ static inline void write_block_to_texture(uint8_t *converted_data,
             int xy_index = y_index + x - x0;
             uint8_t index = (indices >> 2 * xy_index) & 0x03;
             uint8_t alpha_index = separate_alpha ? xy_index : index;
-            uint32_t color = (r[index] << 24) | (g[index] << 16) | (b[index] << 8) | a[alpha_index];
+            uint32_t color = r[index] | (g[index] << 8) | (b[index] << 16) | (a[alpha_index] << 24);
             *(uint32_t*)(converted_data + (z_plus_y_pos_factor + x) * 4) = color;
         }
     }

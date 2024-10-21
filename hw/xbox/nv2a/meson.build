@@ -16,6 +16,7 @@ specific_ss.add(files(
 	'pvideo.c',
 	'shaders.c',
 	'stubs.c',
+	'texsigns.c',
 	'user.c',
 	'vsh.c',
 	'swizzle.c',

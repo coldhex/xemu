@@ -170,6 +170,7 @@ typedef struct TextureShape {
 
     unsigned int min_mipmap_level, max_mipmap_level;
     unsigned int pitch;
+    uint8_t channel_signs;
 } TextureShape;
 
 typedef struct TextureBinding {

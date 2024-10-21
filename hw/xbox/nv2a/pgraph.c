@@ -27,6 +27,7 @@
 #include "s3tc.h"
 #include "ui/xemu-settings.h"
 #include "qemu/fast-hash.h"
+#include "texsigns.h"
 
 const float f16_max = 511.9375f;
 const float f24_max = 1.0E30;
@@ -292,7 +293,7 @@ static const ColorFormatInfo kelvin_color_format_map[66] = {
          {GL_RED, GL_RED, GL_RED, GL_GREEN}},
 
     [NV097_SET_TEXTURE_FORMAT_COLOR_SZ_R6G5B5] =
-        {2, false, GL_RGB8_SNORM, GL_RGB, GL_BYTE}, /* FIXME: This might be signed */
+        {2, false, GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE},
     [NV097_SET_TEXTURE_FORMAT_COLOR_SZ_G8B8] =
         {2, false, GL_RG8, GL_RG, GL_UNSIGNED_BYTE,
          {GL_RED, GL_GREEN, GL_RED, GL_GREEN}},
@@ -430,8 +431,17 @@ static float convert_f16_to_float(uint16_t f16);
 static float convert_f24_to_float(uint32_t f24);
 static uint8_t cliptobyte(int x);
 static void convert_yuy2_to_rgb(const uint8_t *line, unsigned int ix, uint8_t *r, uint8_t *g, uint8_t* b);
-static void convert_uyvy_to_rgb(const uint8_t *line, unsigned int ix, uint8_t *r, uint8_t *g, uint8_t* b);
-static uint8_t* convert_texture_data(const TextureShape s, const uint8_t *data, const uint8_t *palette_data, unsigned int width, unsigned int height, unsigned int depth, unsigned int row_pitch, unsigned int slice_pitch);
+static uint8_t* convert_texture_data(const TextureShape s,
+                                     const uint8_t *data,
+                                     const uint8_t *palette_data,
+                                     unsigned int width,
+                                     unsigned int height,
+                                     unsigned int depth,
+                                     unsigned int row_pitch,
+                                     unsigned int slice_pitch,
+                                     GLint *out_gl_internal_format,
+                                     GLenum *out_gl_format,
+                                     GLenum *out_gl_type);
 static void upload_gl_texture(GLenum gl_target, const TextureShape s, const uint8_t *texture_data, const uint8_t *palette_data);
 static TextureBinding* generate_texture(const TextureShape s, const uint8_t *texture_data, const uint8_t *palette_data);
 static void texture_binding_destroy(gpointer data);
@@ -4112,6 +4122,8 @@ void pgraph_init(NV2AState *d)
     pgraph_init_display_renderer(d);
 
     glo_set_current(NULL);
+
+    texsigns_init_conversion();
 }
 
 void pgraph_destroy(PGRAPHState *pg)
@@ -4690,18 +4702,6 @@ static void pgraph_bind_shaders(PGRAPHState *pg)
             }
         }
 
-        /* Keep track of whether texture data has been loaded as signed
-         * normalized integers or not. This dictates whether or not we will need
-         * to re-map in fragment shader for certain texture modes (e.g.
-         * bumpenvmap).
-         *
-         * FIXME: When signed texture data is loaded as unsigned and remapped in
-         * fragment shader, there may be interpolation artifacts. Fix this to
-         * support signed textures more appropriately.
-         */
-        state.psh.snorm_tex[i] = (f.gl_internal_format == GL_RGB8_SNORM)
-                                 || (f.gl_internal_format == GL_RG8_SNORM);
-
         state.psh.shadow_map[i] = f.depth;
 
         uint32_t filter = pg->regs[NV_PGRAPH_TEXFILTER0 + i*4];
@@ -4719,6 +4719,14 @@ static void pgraph_bind_shaders(PGRAPHState *pg)
         }
 
         state.psh.conv_tex[i] = kernel;
+
+        state.psh.tex_channel_signs[i] = GET_MASK(filter, NV_PGRAPH_TEXFILTER0_ASIGNED |
+                                                  NV_PGRAPH_TEXFILTER0_RSIGNED |
+                                                  NV_PGRAPH_TEXFILTER0_GSIGNED |
+                                                  NV_PGRAPH_TEXFILTER0_BSIGNED);
+
+        state.psh.yuv_tex[i] = color_format == NV097_SET_TEXTURE_FORMAT_COLOR_LC_IMAGE_CR8YB8CB8YA8 ||
+            color_format == NV097_SET_TEXTURE_FORMAT_COLOR_LC_IMAGE_YB8CR8YA8CB8;
     }
 
     uint64_t shader_state_hash = fast_hash((uint8_t*) &state, sizeof(ShaderState));
@@ -6668,12 +6676,6 @@ static void pgraph_bind_textures(NV2AState *d)
         default: assert(false); break;
         }
 
-        /* Check for unsupported features */
-        if (filter & NV_PGRAPH_TEXFILTER0_ASIGNED) NV2A_UNIMPLEMENTED("NV_PGRAPH_TEXFILTER0_ASIGNED");
-        if (filter & NV_PGRAPH_TEXFILTER0_RSIGNED) NV2A_UNIMPLEMENTED("NV_PGRAPH_TEXFILTER0_RSIGNED");
-        if (filter & NV_PGRAPH_TEXFILTER0_GSIGNED) NV2A_UNIMPLEMENTED("NV_PGRAPH_TEXFILTER0_GSIGNED");
-        if (filter & NV_PGRAPH_TEXFILTER0_BSIGNED) NV2A_UNIMPLEMENTED("NV_PGRAPH_TEXFILTER0_BSIGNED");
-
         nv2a_profile_inc_counter(NV2A_PROF_TEX_BIND);
 
         hwaddr dma_len;
@@ -6857,6 +6859,11 @@ static void pgraph_bind_textures(NV2AState *d)
         state.max_mipmap_level = max_mipmap_level;
         state.pitch = pitch;
         state.border = is_bordered;
+
+        state.channel_signs = GET_MASK(filter, NV_PGRAPH_TEXFILTER0_ASIGNED |
+                                       NV_PGRAPH_TEXFILTER0_RSIGNED |
+                                       NV_PGRAPH_TEXFILTER0_GSIGNED |
+                                       NV_PGRAPH_TEXFILTER0_BSIGNED);
 
         /*
          * Check active surfaces to see if this texture was a render target
@@ -7272,22 +7279,6 @@ static void convert_yuy2_to_rgb(const uint8_t *line, unsigned int ix,
     *b = cliptobyte((298 * c + 516 * d + 128) >> 8);
 }
 
-static void convert_uyvy_to_rgb(const uint8_t *line, unsigned int ix,
-                                uint8_t *r, uint8_t *g, uint8_t* b) {
-    int c, d, e;
-    c = (int)line[ix * 2 + 1] - 16;
-    if (ix % 2) {
-        d = (int)line[ix * 2 - 2] - 128;
-        e = (int)line[ix * 2 + 0] - 128;
-    } else {
-        d = (int)line[ix * 2 + 0] - 128;
-        e = (int)line[ix * 2 + 2] - 128;
-    }
-    *r = cliptobyte((298 * c + 409 * e + 128) >> 8);
-    *g = cliptobyte((298 * c - 100 * d - 208 * e + 128) >> 8);
-    *b = cliptobyte((298 * c + 516 * d + 128) >> 8);
-}
-
 static uint8_t* convert_texture_data(const TextureShape s,
                                      const uint8_t *data,
                                      const uint8_t *palette_data,
@@ -7295,71 +7286,141 @@ static uint8_t* convert_texture_data(const TextureShape s,
                                      unsigned int height,
                                      unsigned int depth,
                                      unsigned int row_pitch,
-                                     unsigned int slice_pitch)
+                                     unsigned int slice_pitch,
+                                     GLint *out_gl_internal_format,
+                                     GLenum *out_gl_format,
+                                     GLenum *out_gl_type)
 {
-    if (s.color_format == NV097_SET_TEXTURE_FORMAT_COLOR_SZ_I8_A8R8G8B8) {
-        uint8_t* converted_data = (uint8_t*)g_malloc(width * height * depth * 4);
-        int x, y, z;
-        const uint8_t* src = data;
-        uint32_t* dst = (uint32_t*)converted_data;
-        for (z = 0; z < depth; z++) {
-            for (y = 0; y < height; y++) {
-                for (x = 0; x < width; x++) {
-                    uint8_t index = src[y * row_pitch + x];
-                    uint32_t color = *(uint32_t * )(palette_data + index * 4);
-                    *dst++ = color;
-                }
-            }
-            src += slice_pitch;
-        }
-        return converted_data;
-    } else if (s.color_format
-                   == NV097_SET_TEXTURE_FORMAT_COLOR_LC_IMAGE_CR8YB8CB8YA8 ||
-                   s.color_format
-                   == NV097_SET_TEXTURE_FORMAT_COLOR_LC_IMAGE_YB8CR8YA8CB8) {
+    switch (s.color_format) {
+    case NV097_SET_TEXTURE_FORMAT_COLOR_SZ_I8_A8R8G8B8:
+        *out_gl_internal_format = GL_RGBA8;
+        *out_gl_format = GL_RGBA;
+        *out_gl_type = GL_UNSIGNED_BYTE;
+        return texsigns_convert_i8_argb8888(data, palette_data, width, height, depth, row_pitch, slice_pitch, s.channel_signs);
+
+    case NV097_SET_TEXTURE_FORMAT_COLOR_SZ_R6G5B5:
+        *out_gl_internal_format = GL_RGBA8;
+        *out_gl_format = GL_RGBA;
+        *out_gl_type = GL_UNSIGNED_BYTE;
+        return texsigns_convert_rgb655(data, width, height, depth, row_pitch, slice_pitch, s.channel_signs);
+
+    case NV097_SET_TEXTURE_FORMAT_COLOR_LC_IMAGE_CR8YB8CB8YA8:
+    case NV097_SET_TEXTURE_FORMAT_COLOR_LC_IMAGE_YB8CR8YA8CB8: {
         // TODO: Investigate whether a non-1 depth is possible.
         // Generally the hardware asserts when attempting to use volumetric
         // textures in linear formats.
         assert(depth == 1); /* FIXME */
         // FIXME: only valid if control0 register allows for colorspace conversion
         uint8_t* converted_data = (uint8_t*)g_malloc(width * height * 4);
-        int x, y;
         uint8_t* pixel = converted_data;
-        for (y = 0; y < height; y++) {
-            const uint8_t* line = &data[y * row_pitch * depth];
-            for (x = 0; x < width; x++, pixel += 4) {
-                if (s.color_format
-                    == NV097_SET_TEXTURE_FORMAT_COLOR_LC_IMAGE_CR8YB8CB8YA8) {
-                    convert_yuy2_to_rgb(line, x, &pixel[0], &pixel[1], &pixel[2]);
-                } else {
-                    convert_uyvy_to_rgb(line, x, &pixel[0], &pixel[1], &pixel[2]);
-                }
-                pixel[3] = 255;
-          }
-        }
-        return converted_data;
-    } else if (s.color_format
-                   == NV097_SET_TEXTURE_FORMAT_COLOR_SZ_R6G5B5) {
-        assert(depth == 1); /* FIXME */
-        uint8_t *converted_data = (uint8_t*)g_malloc(width * height * 3);
         int x, y;
-        for (y = 0; y < height; y++) {
-            for (x = 0; x < width; x++) {
-                uint16_t rgb655 = *(uint16_t*)(data + y * row_pitch + x * 2);
-                int8_t *pixel = (int8_t*)&converted_data[(y * width + x) * 3];
-                /* Maps 5 bit G and B signed value range to 8 bit
-                 * signed values. R is probably unsigned.
-                 */
-                rgb655 ^= (1 << 9) | (1 << 4);
-                pixel[0] = ((rgb655 & 0xFC00) >> 10) * 0x7F / 0x3F;
-                pixel[1] = ((rgb655 & 0x03E0) >> 5) * 0xFF / 0x1F - 0x80;
-                pixel[2] = (rgb655 & 0x001F) * 0xFF / 0x1F - 0x80;
+        if (s.color_format == NV097_SET_TEXTURE_FORMAT_COLOR_LC_IMAGE_CR8YB8CB8YA8) {
+            for (y = 0; y < height; y++) {
+                const uint8_t* line = &data[y * row_pitch];
+                for (x = 0; x < width; x++, pixel += 4) {
+                    pixel[0] = line[2*x];
+                    pixel[1] = line[(2*x & ~3) + 1];
+                    pixel[2] = line[(2*x & ~3) + 3];
+                    pixel[3] = 255;
+                }
+            }
+        } else {
+            for (y = 0; y < height; y++) {
+                const uint8_t* line = &data[y * row_pitch];
+                for (x = 0; x < width; x++, pixel += 4) {
+                    pixel[0] = line[2*x + 1];
+                    pixel[1] = line[2*x & ~3];
+                    pixel[2] = line[(2*x & ~3) + 2];
+                    pixel[3] = 255;
+                }
             }
         }
+        texsigns_inplace_to_unsigned_rgba(converted_data, width * height * 4, s.channel_signs);
         return converted_data;
-    } else {
+    }
+    default:
+        if (!s.channel_signs) {
+            return NULL;
+        }
+        break;
+    }
+
+    uint8_t *converted_data = NULL;
+
+    switch (s.color_format) {
+    case NV097_SET_TEXTURE_FORMAT_COLOR_SZ_A1R5G5B5:
+    case NV097_SET_TEXTURE_FORMAT_COLOR_LU_IMAGE_A1R5G5B5:
+        converted_data = texsigns_convert_argb1555(data, width, height, depth, row_pitch, slice_pitch, s.channel_signs);
+        break;
+    case NV097_SET_TEXTURE_FORMAT_COLOR_SZ_X1R5G5B5:
+    case NV097_SET_TEXTURE_FORMAT_COLOR_LU_IMAGE_X1R5G5B5:
+        converted_data = texsigns_convert_xrgb1555(data, width, height, depth, row_pitch, slice_pitch, s.channel_signs);
+        break;
+    case NV097_SET_TEXTURE_FORMAT_COLOR_SZ_A4R4G4B4:
+    case NV097_SET_TEXTURE_FORMAT_COLOR_LU_IMAGE_A4R4G4B4:
+        converted_data = texsigns_convert_argb4444(data, width, height, depth, row_pitch, slice_pitch, s.channel_signs);
+        break;
+    case NV097_SET_TEXTURE_FORMAT_COLOR_SZ_R5G6B5:
+    case NV097_SET_TEXTURE_FORMAT_COLOR_LU_IMAGE_R5G6B5:
+        converted_data = texsigns_convert_rgb565(data, width, height, depth, row_pitch, slice_pitch, s.channel_signs);
+        break;
+    case NV097_SET_TEXTURE_FORMAT_COLOR_SZ_Y8:
+    case NV097_SET_TEXTURE_FORMAT_COLOR_LU_IMAGE_Y8:
+        converted_data = texsigns_convert_y8(data, width, height, depth, row_pitch, slice_pitch, s.channel_signs);
+        break;
+    case NV097_SET_TEXTURE_FORMAT_COLOR_LU_IMAGE_Y16:
+        *out_gl_internal_format = GL_RGBA16;
+        *out_gl_format = GL_RGBA;
+        *out_gl_type = GL_UNSIGNED_SHORT;
+        return texsigns_convert_y16(data, width, height, depth, row_pitch, slice_pitch, s.channel_signs);
+    case NV097_SET_TEXTURE_FORMAT_COLOR_SZ_AY8:
+    case NV097_SET_TEXTURE_FORMAT_COLOR_LU_IMAGE_AY8:
+        converted_data = texsigns_convert_ay8(data, width, height, depth, row_pitch, slice_pitch, s.channel_signs);
+        break;
+    case NV097_SET_TEXTURE_FORMAT_COLOR_SZ_A8:
+    case NV097_SET_TEXTURE_FORMAT_COLOR_LU_IMAGE_A8:
+        converted_data = texsigns_convert_a8(data, width, height, depth, row_pitch, slice_pitch, s.channel_signs);
+        break;
+    case NV097_SET_TEXTURE_FORMAT_COLOR_SZ_A8Y8:
+    case NV097_SET_TEXTURE_FORMAT_COLOR_LU_IMAGE_A8Y8:
+        converted_data = texsigns_convert_ay88(data, width, height, depth, row_pitch, slice_pitch, s.channel_signs);
+        break;
+    case NV097_SET_TEXTURE_FORMAT_COLOR_SZ_R8B8:
+        converted_data = texsigns_convert_rb88(data, width, height, depth, row_pitch, slice_pitch, s.channel_signs);
+        break;
+    case NV097_SET_TEXTURE_FORMAT_COLOR_SZ_G8B8:
+    case NV097_SET_TEXTURE_FORMAT_COLOR_LU_IMAGE_G8B8:
+        converted_data = texsigns_convert_gb88(data, width, height, depth, row_pitch, slice_pitch, s.channel_signs);
+        break;
+    case NV097_SET_TEXTURE_FORMAT_COLOR_SZ_A8R8G8B8:
+    case NV097_SET_TEXTURE_FORMAT_COLOR_LU_IMAGE_A8R8G8B8:
+        converted_data = texsigns_convert_argb8888(data, width, height, depth, row_pitch, slice_pitch, s.channel_signs);
+        break;
+    case NV097_SET_TEXTURE_FORMAT_COLOR_SZ_X8R8G8B8:
+    case NV097_SET_TEXTURE_FORMAT_COLOR_LU_IMAGE_X8R8G8B8:
+        converted_data = texsigns_convert_xrgb8888(data, width, height, depth, row_pitch, slice_pitch, s.channel_signs);
+        break;
+    case NV097_SET_TEXTURE_FORMAT_COLOR_SZ_A8B8G8R8:
+    case NV097_SET_TEXTURE_FORMAT_COLOR_LU_IMAGE_A8B8G8R8:
+        converted_data = texsigns_convert_abgr8888(data, width, height, depth, row_pitch, slice_pitch, s.channel_signs);
+        break;
+    case NV097_SET_TEXTURE_FORMAT_COLOR_SZ_B8G8R8A8:
+    case NV097_SET_TEXTURE_FORMAT_COLOR_LU_IMAGE_B8G8R8A8:
+        converted_data = texsigns_convert_bgra8888(data, width, height, depth, row_pitch, slice_pitch, s.channel_signs);
+        break;
+    case NV097_SET_TEXTURE_FORMAT_COLOR_SZ_R8G8B8A8:
+    case NV097_SET_TEXTURE_FORMAT_COLOR_LU_IMAGE_R8G8B8A8:
+        converted_data = texsigns_convert_rgba8888(data, width, height, depth, row_pitch, slice_pitch, s.channel_signs);
+        break;
+    default:
+        NV2A_UNIMPLEMENTED("Signed channel data for color_format 0x%x", s.color_format);
         return NULL;
     }
+
+    *out_gl_internal_format = GL_RGBA8;
+    *out_gl_format = GL_RGBA;
+    *out_gl_type = GL_UNSIGNED_BYTE;
+    return converted_data;
 }
 
 static void upload_gl_texture(GLenum gl_target,
@@ -7391,16 +7452,22 @@ static void upload_gl_texture(GLenum gl_target,
         /* Can't handle strides unaligned to pixels */
         assert(s.pitch % f.bytes_per_pixel == 0);
 
+        GLint gl_internal_format = f.gl_internal_format;
+        GLenum gl_format = f.gl_format;
+        GLenum gl_type = f.gl_type;
         uint8_t *converted = convert_texture_data(s, texture_data,
                                                   palette_data,
                                                   adjusted_width,
                                                   adjusted_height, 1,
-                                                  adjusted_pitch, 0);
+                                                  adjusted_pitch, 0,
+                                                  &gl_internal_format,
+                                                  &gl_format,
+                                                  &gl_type);
         glPixelStorei(GL_UNPACK_ROW_LENGTH,
                       converted ? 0 : adjusted_pitch / f.bytes_per_pixel);
-        glTexImage2D(gl_target, 0, f.gl_internal_format,
+        glTexImage2D(gl_target, 0, gl_internal_format,
                      adjusted_width, adjusted_height, 0,
-                     f.gl_format, f.gl_type,
+                     gl_format, gl_type,
                      converted ? converted : texture_data);
 
         if (converted) {
@@ -7438,6 +7505,7 @@ static void upload_gl_texture(GLenum gl_target,
                 uint8_t *converted = decompress_2d_texture_data(
                     f.gl_internal_format, texture_data, physical_width,
                     physical_height);
+                texsigns_inplace_to_unsigned_rgba(converted, physical_width * physical_height * 4, s.channel_signs);
                 unsigned int tex_width = width;
                 unsigned int tex_height = height;
 
@@ -7454,8 +7522,8 @@ static void upload_gl_texture(GLenum gl_target,
                     }
                 }
 
-                glTexImage2D(gl_target, level, GL_RGBA, tex_width, tex_height, 0,
-                             GL_RGBA, GL_UNSIGNED_INT_8_8_8_8, converted);
+                glTexImage2D(gl_target, level, GL_RGBA8, tex_width, tex_height, 0,
+                             GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV, converted);
                 g_free(converted);
                 if (physical_width != width) {
                     glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
@@ -7474,10 +7542,17 @@ static void upload_gl_texture(GLenum gl_target,
                 uint8_t *unswizzled = (uint8_t*)g_malloc(height * pitch);
                 unswizzle_rect(texture_data, width, height,
                                unswizzled, pitch, f.bytes_per_pixel);
+
+                GLint gl_internal_format = f.gl_internal_format;
+                GLenum gl_format = f.gl_format;
+                GLenum gl_type = f.gl_type;
                 uint8_t *converted = convert_texture_data(s, unswizzled,
                                                           palette_data,
                                                           width, height, 1,
-                                                          pitch, 0);
+                                                          pitch, 0,
+                                                          &gl_internal_format,
+                                                          &gl_format,
+                                                          &gl_type);
                 uint8_t *pixel_data = converted ? converted : unswizzled;
                 unsigned int tex_width = width;
                 unsigned int tex_height = height;
@@ -7492,8 +7567,8 @@ static void upload_gl_texture(GLenum gl_target,
                     pixel_data += 4 * f.bytes_per_pixel + 4 * pitch;
                 }
 
-                glTexImage2D(gl_target, level, f.gl_internal_format, tex_width,
-                             tex_height, 0, f.gl_format, f.gl_type,
+                glTexImage2D(gl_target, level, gl_internal_format, tex_width,
+                             tex_height, 0, gl_format, gl_type,
                              pixel_data);
                 if (s.cubemap && s.border) {
                     glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
@@ -7539,10 +7614,11 @@ static void upload_gl_texture(GLenum gl_target,
                 size_t texture_size = width/4 * height/4 * depth * block_size;
 
                 uint8_t *converted = decompress_3d_texture_data(f.gl_internal_format, texture_data, width, height, depth);
+                texsigns_inplace_to_unsigned_rgba(converted, width * height * depth * 4, s.channel_signs);
 
                 glTexImage3D(gl_target, level,  GL_RGBA8,
                              width, height, depth, 0,
-                             GL_RGBA, GL_UNSIGNED_INT_8_8_8_8,
+                             GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV,
                              converted);
 
                 g_free(converted);
@@ -7559,14 +7635,20 @@ static void upload_gl_texture(GLenum gl_target,
                 unswizzle_box(texture_data, width, height, depth, unswizzled,
                                row_pitch, slice_pitch, f.bytes_per_pixel);
 
+                GLint gl_internal_format = f.gl_internal_format;
+                GLenum gl_format = f.gl_format;
+                GLenum gl_type = f.gl_type;
                 uint8_t *converted = convert_texture_data(s, unswizzled,
                                                           palette_data,
                                                           width, height, depth,
-                                                          row_pitch, slice_pitch);
+                                                          row_pitch, slice_pitch,
+                                                          &gl_internal_format,
+                                                          &gl_format,
+                                                          &gl_type);
 
-                glTexImage3D(gl_target, level, f.gl_internal_format,
+                glTexImage3D(gl_target, level, gl_internal_format,
                              width, height, depth, 0,
-                             f.gl_format, f.gl_type,
+                             gl_format, gl_type,
                              converted ? converted : unswizzled);
 
                 if (converted) {
@@ -7696,10 +7778,12 @@ static TextureBinding* generate_texture(const TextureShape s,
             s.levels - 1);
     }
 
-    if (f.gl_swizzle_mask[0] != 0 || f.gl_swizzle_mask[1] != 0
-        || f.gl_swizzle_mask[2] != 0 || f.gl_swizzle_mask[3] != 0) {
-        glTexParameteriv(gl_target, GL_TEXTURE_SWIZZLE_RGBA,
-                         (const GLint *)f.gl_swizzle_mask);
+    if (!s.channel_signs) {
+        if (f.gl_swizzle_mask[0] != 0 || f.gl_swizzle_mask[1] != 0
+            || f.gl_swizzle_mask[2] != 0 || f.gl_swizzle_mask[3] != 0) {
+            glTexParameteriv(gl_target, GL_TEXTURE_SWIZZLE_RGBA,
+                             (const GLint *)f.gl_swizzle_mask);
+        }
     }
 
     TextureBinding* ret = (TextureBinding *)g_malloc(sizeof(TextureBinding));
