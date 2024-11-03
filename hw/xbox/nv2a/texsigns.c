@@ -37,6 +37,9 @@ struct conversion_info {
     (((value) << ((num_out_bits) - (num_in_bits))) |            \
      ((value) >> (2*(num_in_bits) - (num_out_bits))))
 
+#define CHANNEL_BIT_REPLICATE_SIGNED4(value) \
+    ((value) << 4) | ((value) << 1) | ((value) >> 2)
+
 static uint8_t channel_8bit_expansion(unsigned int value,
 				      bool signed_value,
 				      int num_in_bits)
@@ -46,12 +49,16 @@ static uint8_t channel_8bit_expansion(unsigned int value,
     if (signed_value) {
         unsigned int sign_bit = 1 << (num_in_bits - 1);
         if (value == sign_bit) {
-            return 0;
+            return 0x80;
         }
 
 	int s = -(value >> (num_in_bits - 1));
 	value = ((value ^ s) - s) & (sign_bit - 1);
-	value = CHANNEL_BIT_REPLICATE(value, num_in_bits - 1, num_out_bits - 1);
+        if (num_in_bits == 4) {
+            value = CHANNEL_BIT_REPLICATE_SIGNED4(value);
+        } else {
+            value = CHANNEL_BIT_REPLICATE(value, num_in_bits - 1, num_out_bits - 1);
+        }
 	value = (value ^ s) - s;
         return value;
     }
