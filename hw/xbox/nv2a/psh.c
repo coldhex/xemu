@@ -36,6 +36,7 @@
 
 #include "qapi/qmp/qstring.h"
 
+#include "nv2a_regs.h"
 #include "shaders_common.h"
 #include "psh.h"
 
@@ -639,6 +640,9 @@ static void psh_append_shadowmap(const struct PixelShader *ps, int i, bool compa
                        "vec4 t%d_depth = textureProj(texSamp%d, pT%d.xyw);\n",
                        i, i, i, i, i);
 
+    // Depth texture probably should never have signed channels
+    assert(!(ps->state.tex_channel_signs[i] & TEX_CHANNEL_SIGNED_MASK));
+
     const char *comparison = shadow_comparison_map[ps->state.shadow_depth_func];
 
     // Depth.y != 0 indicates 24 bit; depth.z != 0 indicates float.
@@ -685,20 +689,67 @@ static void apply_border_adjustment(const struct PixelShader *ps, MString *vars,
         var_name, var_name, i, ps->state.border_inv_real_size[i][0], ps->state.border_inv_real_size[i][1], ps->state.border_inv_real_size[i][2]);
 }
 
+static bool is_yuv_format(uint8_t color_format)
+{
+    return color_format == NV097_SET_TEXTURE_FORMAT_COLOR_LC_IMAGE_CR8YB8CB8YA8 ||
+        color_format == NV097_SET_TEXTURE_FORMAT_COLOR_LC_IMAGE_YB8CR8YA8CB8;
+}
+
+static bool is_16bit_format(uint8_t color_format)
+{
+    return color_format == NV097_SET_TEXTURE_FORMAT_COLOR_LU_IMAGE_Y16 ||
+        color_format == NV097_SET_TEXTURE_FORMAT_COLOR_SZ_R16B16 ||
+        color_format == NV097_SET_TEXTURE_FORMAT_COLOR_SZ_Y16 ||
+        color_format == NV097_SET_TEXTURE_FORMAT_COLOR_LU_IMAGE_R16B16;
+}
+
 static void post_process_texture_samples(const struct PixelShader *ps, MString *vars, int tex_index)
 {
     uint8_t signs = ps->state.tex_channel_signs[tex_index];
-    if (signs) {
-        mstring_append_fmt(vars, "t%d = vec4(", tex_index);
-        mstring_append_fmt(vars, (signs & TEX_CHANNEL_RSIGNED) ? "signed_channel(t%d.r), " : "t%d.r, ", tex_index);
-        mstring_append_fmt(vars, (signs & TEX_CHANNEL_GSIGNED) ? "signed_channel(t%d.g), " : "t%d.g, ", tex_index);
-        mstring_append_fmt(vars, (signs & TEX_CHANNEL_BSIGNED) ? "signed_channel(t%d.b), " : "t%d.b, ", tex_index);
-        mstring_append_fmt(vars, (signs & TEX_CHANNEL_ASIGNED) ? "signed_channel(t%d.a));\n" : "t%d.a);\n", tex_index);
+    uint8_t color_format = ps->state.tex_color_format[tex_index];
+
+    mstring_append_fmt(vars, "uvec4 it%d = uvec4(", tex_index);
+    if (is_16bit_format(color_format)) {
+        mstring_append_fmt(vars, (signs & TEX_CHANNEL_GSIGNED) ?
+                           "signed_channel_int_16bit(t%d.g), " : "channel_int_16bit(t%d.b), ", tex_index);
+        mstring_append_fmt(vars, (signs & TEX_CHANNEL_ASIGNED) ?
+                           "signed_channel_int_16bit(t%d.a)).bgra;\n" : "channel_int_16bit(t%d.r)).bgra;\n", tex_index);
+    } else {
+        mstring_append_fmt(vars, (signs & TEX_CHANNEL_RSIGNED) ?
+                           "signed_channel_int(t%d.r), " : "channel_int(t%d.r), ", tex_index);
+        mstring_append_fmt(vars, (signs & TEX_CHANNEL_GSIGNED) ?
+                           "signed_channel_int(t%d.g), " : "channel_int(t%d.g), ", tex_index);
+        mstring_append_fmt(vars, (signs & TEX_CHANNEL_BSIGNED) ?
+                           "signed_channel_int(t%d.b), " : "channel_int(t%d.b), ", tex_index);
+        mstring_append_fmt(vars, (signs & TEX_CHANNEL_ASIGNED) ?
+                           "signed_channel_int(t%d.a));\n" : "channel_int(t%d.a));\n", tex_index);
     }
 
-    if (ps->state.yuv_tex[tex_index]) {
+    if (signs & TEX_CHANNEL_SIGNED_MASK) {
+        mstring_append_fmt(vars, "t%d = vec4(", tex_index);
+        if (is_16bit_format(color_format)) {
+            mstring_append_fmt(vars, (signs & TEX_CHANNEL_RSIGNED) ? "signed_channel_16bit(t%d.a), " : "t%d.r, ", tex_index);
+            mstring_append_fmt(vars, (signs & TEX_CHANNEL_GSIGNED) ? "signed_channel_16bit(t%d.g), " : "t%d.b, ", tex_index);
+            mstring_append_fmt(vars, (signs & TEX_CHANNEL_BSIGNED) ? "signed_channel_16bit(t%d.g), " : "t%d.b, ", tex_index);
+            mstring_append_fmt(vars, (signs & TEX_CHANNEL_ASIGNED) ? "signed_channel_16bit(t%d.a));\n" : "t%d.r);\n", tex_index);
+        } else {
+            mstring_append_fmt(vars, (signs & TEX_CHANNEL_RSIGNED) ? "signed_channel(t%d.r), " : "t%d.r, ", tex_index);
+            mstring_append_fmt(vars, (signs & TEX_CHANNEL_GSIGNED) ? "signed_channel(t%d.g), " : "t%d.g, ", tex_index);
+            mstring_append_fmt(vars, (signs & TEX_CHANNEL_BSIGNED) ? "signed_channel(t%d.b), " : "t%d.b, ", tex_index);
+            mstring_append_fmt(vars, (signs & TEX_CHANNEL_ASIGNED) ? "signed_channel(t%d.a));\n" : "t%d.a);\n", tex_index);
+        }
+    }
+
+    if (is_yuv_format(color_format)) {
         mstring_append_fmt(vars, "t%d = yuv_to_rgb(t%d);\n", tex_index, tex_index);
     }
+}
+
+static void set_stage_result_from_rgba(const struct PixelShader *ps, MString *vars, int tex_index)
+{
+    mstring_append_fmt(vars, "uvec4 it%d = uvec4(channel_int_floor(t%d.r), channel_int_floor(t%d.g), "
+                       "channel_int_floor(t%d.b), channel_int_floor(t%d.a));\n",
+                       tex_index, tex_index, tex_index, tex_index, tex_index);
 }
 
 static MString* psh_convert(struct PixelShader *ps)
@@ -732,49 +783,52 @@ static MString* psh_convert(struct PixelShader *ps)
     };
 
     mstring_append(preflight,
-        "float sign1(float x) {\n"
-        "    x *= 255.0;\n"
-        "    return (x-128.0)/127.0;\n"
+        "uint channel_int(float uvalue) {\n"
+        "    return uint(round(clamp(uvalue, 0.0f, 1.0f)*255.0f));\n"
         "}\n"
-        "float sign2(float x) {\n"
-        "    x *= 255.0;\n"
-        "    if (x >= 128.0) return (x-255.5)/127.5;\n"
-        "               else return (x+0.5)/127.5;\n"
+        "uint channel_int_floor(float uvalue) {\n"
+        "    return uint(clamp(uvalue, 0.0f, 1.0f)*255.0f);\n"
         "}\n"
-        "float sign3(float x) {\n"
-        "    x *= 255.0;\n"
-        "    if (x >= 128.0) return (x-256.0)/127.0;\n"
-        "               else return (x)/127.0;\n"
+        "uvec2 channel_int_16bit(float uvalue) {\n"
+        "    uint x = uint(round(clamp(uvalue, 0.0f, 1.0f)*65535.0f));\n"
+        "    return uvec2(x & 0xFFu, x >> 8);\n"
         "}\n"
-        "vec3 dotmap_zero_to_one(vec4 col) {\n"
-        "    return col.rgb;\n"
+        "float sign1(uint x) {\n"
+        "    return (float(x) - 128.0f) / 127.0f;\n"
         "}\n"
-        "vec3 dotmap_minus1_to_1_d3d(vec4 col) {\n"
+        "float sign2(uint x) {\n"
+        "    float fx = float(x);\n"
+        "    return (fx + 0.5f - 256.0f*step(127.5f, fx)) / 127.5f;\n"
+        "}\n"
+        "float sign3(uint x) {\n"
+        "    float fx = float(x);\n"
+        "    return (fx - 256.0f*step(127.5f, fx)) / 127.0f;\n"
+        "}\n"
+        "vec3 dotmap_zero_to_one(uvec4 col) {\n"
+        "    return vec3(col.rgb) / 255.0f;\n"
+        "}\n"
+        "vec3 dotmap_minus1_to_1_d3d(uvec4 col) {\n"
         "    return vec3(sign1(col.r),sign1(col.g),sign1(col.b));\n"
         "}\n"
-        "vec3 dotmap_minus1_to_1_gl(vec4 col) {\n"
+        "vec3 dotmap_minus1_to_1_gl(uvec4 col) {\n"
         "    return vec3(sign2(col.r),sign2(col.g),sign2(col.b));\n"
         "}\n"
-        "vec3 dotmap_minus1_to_1(vec4 col) {\n"
+        "vec3 dotmap_minus1_to_1(uvec4 col) {\n"
         "    return vec3(sign3(col.r),sign3(col.g),sign3(col.b));\n"
         "}\n"
-        "vec3 dotmap_hilo_1(vec4 col) {\n"
-        "    uint hi_i = uint(col.a * float(0xff)) << 8\n"
-        "              | uint(col.r * float(0xff));\n"
-        "    uint lo_i = uint(col.g * float(0xff)) << 8\n"
-        "              | uint(col.b * float(0xff));\n"
-        "    float hi_f = float(hi_i) / float(0xffff);\n"
-        "    float lo_f = float(lo_i) / float(0xffff);\n"
-        "    return vec3(hi_f, lo_f, 1.0);\n"
+        "vec3 dotmap_hilo_1(uvec4 col) {\n"
+        "    float hi = float(col.a << 8 | col.r) / 65535.0f;\n"
+        "    float lo = float(col.g << 8 | col.b) / 65535.0f;\n"
+        "    return vec3(hi, lo, 1.0f);\n"
         "}\n"
-        "vec3 dotmap_hilo_hemisphere_d3d(vec4 col) {\n"
-        "    return col.rgb;\n" // FIXME
+        "vec3 dotmap_hilo_hemisphere_d3d(uvec4 col) {\n"
+        "    return vec3(col.rgb) / 255.0f;\n" // FIXME
         "}\n"
-        "vec3 dotmap_hilo_hemisphere_gl(vec4 col) {\n"
-        "    return col.rgb;\n" // FIXME
+        "vec3 dotmap_hilo_hemisphere_gl(uvec4 col) {\n"
+        "    return vec3(col.rgb) / 255.0f;\n" // FIXME
         "}\n"
-        "vec3 dotmap_hilo_hemisphere(vec4 col) {\n"
-        "    return col.rgb;\n" // FIXME
+        "vec3 dotmap_hilo_hemisphere(uvec4 col) {\n"
+        "    return vec3(col.rgb) / 255.0f;\n" // FIXME
         "}\n"
         "const float[9] gaussian3x3 = float[9](\n"
         "    1.0/16.0, 2.0/16.0, 1.0/16.0,\n"
@@ -823,7 +877,6 @@ static MString* psh_convert(struct PixelShader *ps)
                              "}\n");
     }
 
-    /* calculate perspective-correct inputs */
     MString *vars = mstring_new();
     mstring_append(vars, "vec4 pD0 = vtxD0;\n");
     mstring_append(vars, "vec4 pD1 = vtxD1;\n");
@@ -852,16 +905,28 @@ static MString* psh_convert(struct PixelShader *ps)
 
         const char *sampler_type = get_sampler_type(ps->tex_modes[i], &ps->state, i);
 
-        if (ps->state.tex_channel_signs[i] && !signed_channel_in_preflight) {
+        if ((ps->state.tex_channel_signs[i] & TEX_CHANNEL_SIGNED_MASK) && !signed_channel_in_preflight) {
             mstring_append(preflight,
                            "float signed_channel(float uvalue) {\n"
-                           "    return clamp((uvalue*255.0 - 128.0)/127.0, -1.0, 1.0);\n"
+                           "    return clamp((uvalue*255.0f - 128.0f)/127.0f, -1.0f, 1.0f);\n"
+                           "}\n"
+                           "float signed_channel_16bit(float uvalue) {\n"
+                           "    return clamp((uvalue*65535.0f - 32768.0f)/32767.0f, -1.0f, 1.0f);\n"
+                           "}\n"
+                           "uint signed_channel_int(float uvalue) {\n"
+                           "    float x = round(uvalue*255.0f) - 128.0f;\n"
+                           "    return uint(x + 256.0f*(1.0f - step(0.0f, x)));\n"
+                           "}\n"
+                           "uvec2 signed_channel_int_16bit(float uvalue) {\n"
+                           "    float x = round(uvalue*65535.0f) - 32768.0f;\n"
+                           "    uint xx = uint(x + 65536.0f*(1.0f - step(0.0f, x)));\n"
+                           "    return uvec2(xx & 0xFFu, xx >> 8);\n"
                            "}\n"
                 );
             signed_channel_in_preflight = true;
         }
 
-        if (ps->state.yuv_tex[i] && !yuv_to_rgb_in_preflight) {
+        if (is_yuv_format(ps->state.tex_color_format[i]) && !yuv_to_rgb_in_preflight) {
             mstring_append(preflight,
                            "vec4 yuv_to_rgb(vec4 yuv) {\n"
                            "    float c = clamp(yuv.r, 0.0, 1.0) - 16.0/255.0;\n"
@@ -878,7 +943,7 @@ static MString* psh_convert(struct PixelShader *ps)
 
         assert(ps->dot_map[i] < 8);
         const char *dotmap_func = dotmap_funcs[ps->dot_map[i]];
-        if (ps->dot_map[i] > 3) {
+        if (ps->dot_map[i] > 4) {
             NV2A_UNIMPLEMENTED("Dot Mapping mode %s", dotmap_func);
         }
 
@@ -886,10 +951,12 @@ static MString* psh_convert(struct PixelShader *ps)
         case PS_TEXTUREMODES_NONE:
             mstring_append_fmt(vars, "vec4 t%d = vec4(0.0); /* PS_TEXTUREMODES_NONE */\n",
                                i);
+            set_stage_result_from_rgba(ps, vars, i);
             break;
         case PS_TEXTUREMODES_PROJECT2D: {
             if (ps->state.shadow_map[i]) {
                 psh_append_shadowmap(ps, i, false, vars);
+                set_stage_result_from_rgba(ps, vars, i);
             } else {
                 const char *lookup = "textureProj";
                 if ((ps->state.conv_tex[i] == CONVOLUTION_FILTER_GAUSSIAN)
@@ -915,6 +982,7 @@ static MString* psh_convert(struct PixelShader *ps)
         case PS_TEXTUREMODES_PROJECT3D:
             if (ps->state.shadow_map[i]) {
                 psh_append_shadowmap(ps, i, true, vars);
+                set_stage_result_from_rgba(ps, vars, i);
             } else {
                 apply_border_adjustment(ps, vars, i, "pT%d");
                 mstring_append_fmt(vars, "vec4 t%d = textureProj(texSamp%d, pT%d.xyzw);\n",
@@ -929,7 +997,8 @@ static MString* psh_convert(struct PixelShader *ps)
             break;
         case PS_TEXTUREMODES_PASSTHRU:
             assert(ps->state.border_logical_size[i][0] == 0.0f && "Unexpected border texture on passthru");
-            mstring_append_fmt(vars, "vec4 t%d = pT%d;\n", i, i);
+            mstring_append_fmt(vars, "vec4 t%d = clamp(pT%d, 0.0f, 1.0f);\n", i, i);
+            set_stage_result_from_rgba(ps, vars, i);
             break;
         case PS_TEXTUREMODES_CLIPPLANE: {
             int j;
@@ -940,14 +1009,15 @@ static MString* psh_convert(struct PixelShader *ps)
                                    i, "xyzw"[j],
                                    ps->state.compare_mode[i][j] ? ">=" : "<");
             }
+            set_stage_result_from_rgba(ps, vars, i);
             break;
         }
         case PS_TEXTUREMODES_BUMPENVMAP:
             assert(i >= 1);
             mstring_append_fmt(preflight, "uniform mat2 bumpMat%d;\n", i);
-            mstring_append_fmt(vars, "vec2 dsdt%d = t%d.bg;\n", i, ps->input_tex[i]);
-            mstring_append_fmt(vars, "dsdt%d = bumpMat%d * dsdt%d;\n",
-                i, i, i, i);
+            mstring_append_fmt(vars, "vec2 dsdt%d = vec2(sign3(it%d.b), sign3(it%d.g));\n",
+                               i, ps->input_tex[i], ps->input_tex[i]);
+            mstring_append_fmt(vars, "dsdt%d = bumpMat%d * dsdt%d;\n", i, i, i);
             mstring_append_fmt(vars, "vec4 t%d = texture(texSamp%d, texScale%d * (pT%d.xy + dsdt%d));\n",
                 i, i, i, i, i);
             post_process_texture_samples(ps, vars, i);
@@ -957,26 +1027,27 @@ static MString* psh_convert(struct PixelShader *ps)
             mstring_append_fmt(preflight, "uniform float bumpScale%d;\n", i);
             mstring_append_fmt(preflight, "uniform float bumpOffset%d;\n", i);
             mstring_append_fmt(preflight, "uniform mat2 bumpMat%d;\n", i);
-            mstring_append_fmt(vars, "vec3 dsdtl%d = t%d.bgr;\n", i, ps->input_tex[i]);
-            mstring_append_fmt(vars, "dsdtl%d.st = bumpMat%d * dsdtl%d.st;\n",
-                i, i, i, i);
+            mstring_append_fmt(vars, "vec3 dsdtl%d = vec3(sign3(it%d.b), sign3(it%d.g), float(it%d.r)/255.0f);\n",
+                               i, ps->input_tex[i], ps->input_tex[i], ps->input_tex[i]);
+            mstring_append_fmt(vars, "dsdtl%d.st = bumpMat%d * dsdtl%d.st;\n", i, i, i);
             mstring_append_fmt(vars, "vec4 t%d = texture(texSamp%d, texScale%d * (pT%d.xy + dsdtl%d.st));\n",
                 i, i, i, i, i);
             post_process_texture_samples(ps, vars, i);
-            mstring_append_fmt(vars, "t%d = t%d * (bumpScale%d * dsdtl%d.p + bumpOffset%d);\n",
+            mstring_append_fmt(vars, "t%d = t%d * clamp(bumpScale%d * dsdtl%d.p + bumpOffset%d, 0.0f, 1.0f);\n",
                 i, i, i, i, i);
             break;
         case PS_TEXTUREMODES_BRDF:
             assert(i >= 2);
             mstring_append_fmt(vars, "vec4 t%d = vec4(0.0); /* PS_TEXTUREMODES_BRDF */\n",
                                i);
+            set_stage_result_from_rgba(ps, vars, i);
             NV2A_UNIMPLEMENTED("PS_TEXTUREMODES_BRDF");
             break;
         case PS_TEXTUREMODES_DOT_ST:
             assert(i >= 2);
             mstring_append_fmt(vars, "/* PS_TEXTUREMODES_DOT_ST */\n");
             mstring_append_fmt(vars,
-               "float dot%d = dot(pT%d.xyz, %s(t%d));\n"
+               "float dot%d = dot(pT%d.xyz, %s(it%d));\n"
                "vec2 dotST%d = vec2(dot%d, dot%d);\n",
                 i, i, dotmap_func, ps->input_tex[i], i, i-1, i);
 
@@ -988,18 +1059,20 @@ static MString* psh_convert(struct PixelShader *ps)
         case PS_TEXTUREMODES_DOT_ZW:
             assert(i >= 2);
             mstring_append_fmt(vars, "/* PS_TEXTUREMODES_DOT_ZW */\n");
-            mstring_append_fmt(vars, "float dot%d = dot(pT%d.xyz, %s(t%d));\n",
+            mstring_append_fmt(vars, "float dot%d = dot(pT%d.xyz, %s(it%d));\n",
                 i, i, dotmap_func, ps->input_tex[i]);
             mstring_append_fmt(vars, "vec4 t%d = vec4(0.0);\n", i);
             // FIXME: mstring_append_fmt(vars, "gl_FragDepth = t%d.x;\n", i);
+            set_stage_result_from_rgba(ps, vars, i);
+            NV2A_UNIMPLEMENTED("PS_TEXTUREMODES_DOT_ZW");
             break;
         case PS_TEXTUREMODES_DOT_RFLCT_DIFF:
             assert(i == 2);
             mstring_append_fmt(vars, "/* PS_TEXTUREMODES_DOT_RFLCT_DIFF */\n");
-            mstring_append_fmt(vars, "float dot%d = dot(pT%d.xyz, %s(t%d));\n",
+            mstring_append_fmt(vars, "float dot%d = dot(pT%d.xyz, %s(it%d));\n",
                 i, i, dotmap_func, ps->input_tex[i]);
             assert(ps->dot_map[i+1] < 8);
-            mstring_append_fmt(vars, "float dot%d_n = dot(pT%d.xyz, %s(t%d));\n",
+            mstring_append_fmt(vars, "float dot%d_n = dot(pT%d.xyz, %s(it%d));\n",
                 i, i+1, dotmap_funcs[ps->dot_map[i+1]], ps->input_tex[i+1]);
             mstring_append_fmt(vars, "vec3 n_%d = vec3(dot%d, dot%d, dot%d_n);\n",
                 i, i-1, i, i);
@@ -1011,7 +1084,7 @@ static MString* psh_convert(struct PixelShader *ps)
         case PS_TEXTUREMODES_DOT_RFLCT_SPEC:
             assert(i == 3);
             mstring_append_fmt(vars, "/* PS_TEXTUREMODES_DOT_RFLCT_SPEC */\n");
-            mstring_append_fmt(vars, "float dot%d = dot(pT%d.xyz, %s(t%d));\n",
+            mstring_append_fmt(vars, "float dot%d = dot(pT%d.xyz, %s(it%d));\n",
                 i, i, dotmap_func, ps->input_tex[i]);
             mstring_append_fmt(vars, "vec3 n_%d = vec3(dot%d, dot%d, dot%d);\n",
                 i, i-2, i-1, i);
@@ -1028,7 +1101,7 @@ static MString* psh_convert(struct PixelShader *ps)
             assert(i == 3);
             mstring_append_fmt(vars, "/* PS_TEXTUREMODES_DOT_STR_3D */\n");
             mstring_append_fmt(vars,
-               "float dot%d = dot(pT%d.xyz, %s(t%d));\n"
+               "float dot%d = dot(pT%d.xyz, %s(it%d));\n"
                "vec3 dotSTR%d = vec3(dot%d, dot%d, dot%d);\n",
                 i, i, dotmap_func, ps->input_tex[i],
                 i, i-2, i-1, i);
@@ -1041,7 +1114,7 @@ static MString* psh_convert(struct PixelShader *ps)
         case PS_TEXTUREMODES_DOT_STR_CUBE:
             assert(i == 3);
             mstring_append_fmt(vars, "/* PS_TEXTUREMODES_DOT_STR_CUBE */\n");
-            mstring_append_fmt(vars, "float dot%d = dot(pT%d.xyz, %s(t%d));\n",
+            mstring_append_fmt(vars, "float dot%d = dot(pT%d.xyz, %s(it%d));\n",
                 i, i, dotmap_func, ps->input_tex[i]);
             mstring_append_fmt(vars, "vec3 dotSTR%dCube = vec3(dot%d, dot%d, dot%d);\n",
                                i, i-2, i-1, i);
@@ -1053,15 +1126,16 @@ static MString* psh_convert(struct PixelShader *ps)
         case PS_TEXTUREMODES_DPNDNT_AR:
             assert(i >= 1);
             assert(!ps->state.rect_tex[i]);
-            mstring_append_fmt(vars, "vec2 t%dAR = t%d.ar;\n", i, ps->input_tex[i]);
+            mstring_append_fmt(vars, "vec2 t%dAR = vec2(it%d.ar)/255.0;\n", i, ps->input_tex[i]);
             apply_border_adjustment(ps, vars, i, "t%dAR");
             mstring_append_fmt(vars, "vec4 t%d = texture(texSamp%d, t%dAR);\n",
                 i, i, i);
+            post_process_texture_samples(ps, vars, i);
             break;
         case PS_TEXTUREMODES_DPNDNT_GB:
             assert(i >= 1);
             assert(!ps->state.rect_tex[i]);
-            mstring_append_fmt(vars, "vec2 t%dGB = t%d.gb;\n", i, ps->input_tex[i]);
+            mstring_append_fmt(vars, "vec2 t%dGB = vec2(it%d.gb)/255.0;\n", i, ps->input_tex[i]);
             apply_border_adjustment(ps, vars, i, "t%dGB");
             mstring_append_fmt(vars, "vec4 t%d = texture(texSamp%d, t%dGB);\n",
                 i, i, i);
@@ -1070,7 +1144,7 @@ static MString* psh_convert(struct PixelShader *ps)
         case PS_TEXTUREMODES_DOTPRODUCT:
             assert(i == 1 || i == 2);
             mstring_append_fmt(vars, "/* PS_TEXTUREMODES_DOTPRODUCT */\n");
-            mstring_append_fmt(vars, "float dot%d = dot(pT%d.xyz, %s(t%d));\n",
+            mstring_append_fmt(vars, "float dot%d = dot(pT%d.xyz, %s(it%d));\n",
                 i, i, dotmap_func, ps->input_tex[i]);
             mstring_append_fmt(vars, "vec4 t%d = vec4(0.0);\n", i);
             break;
@@ -1079,6 +1153,7 @@ static MString* psh_convert(struct PixelShader *ps)
             mstring_append_fmt(vars, "vec4 t%d = vec4(0.0); /* PS_TEXTUREMODES_DOT_RFLCT_SPEC_CONST */\n",
                                i);
             NV2A_UNIMPLEMENTED("PS_TEXTUREMODES_DOT_RFLCT_SPEC_CONST");
+            set_stage_result_from_rgba(ps, vars, i);
             break;
         default:
             fprintf(stderr, "Unknown ps tex mode: 0x%x\n", ps->tex_modes[i]);

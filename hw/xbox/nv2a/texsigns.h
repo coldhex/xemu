@@ -64,8 +64,7 @@ uint8_t *texsigns_convert_y16(
     int height,
     int depth,
     int row_pitch,
-    int slice_pitch,
-    int channel_signs);
+    int slice_pitch);
 
 uint8_t *texsigns_convert_ay8(
     const uint8_t *data,
@@ -111,6 +110,14 @@ uint8_t *texsigns_convert_gb88(
     int row_pitch,
     int slice_pitch,
     int channel_signs);
+
+uint8_t *texsigns_convert_r16b16(
+    const uint8_t *data,
+    int width,
+    int height,
+    int depth,
+    int row_pitch,
+    int slice_pitch);
 
 uint8_t *texsigns_convert_argb8888(
     const uint8_t *data,

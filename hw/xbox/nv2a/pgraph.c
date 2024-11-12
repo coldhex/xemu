@@ -328,9 +328,18 @@ static const ColorFormatInfo kelvin_color_format_map[66] = {
         {2, true, GL_DEPTH_COMPONENT16, GL_DEPTH_COMPONENT, GL_HALF_FLOAT,
           {GL_RED, GL_ZERO, GL_ONE, GL_ZERO}, true},
 
+    [NV097_SET_TEXTURE_FORMAT_COLOR_SZ_Y16] =
+        {2, false, GL_R16, GL_RED, GL_UNSIGNED_SHORT,
+         {GL_ONE, GL_RED, GL_RED, GL_ONE}},
+    [NV097_SET_TEXTURE_FORMAT_COLOR_SZ_R16B16] =
+        {4, false, GL_RG16, GL_RG, GL_UNSIGNED_SHORT,
+         {GL_GREEN, GL_RED, GL_RED, GL_GREEN}},
     [NV097_SET_TEXTURE_FORMAT_COLOR_LU_IMAGE_Y16] =
         {2, true, GL_R16, GL_RED, GL_UNSIGNED_SHORT,
          {GL_ONE, GL_RED, GL_RED, GL_ONE}},
+    [NV097_SET_TEXTURE_FORMAT_COLOR_LU_IMAGE_R16B16] =
+        {4, true, GL_RG16, GL_RG, GL_UNSIGNED_SHORT,
+         {GL_GREEN, GL_RED, GL_RED, GL_GREEN}},
     [NV097_SET_TEXTURE_FORMAT_COLOR_SZ_A8B8G8R8] =
         {4, false, GL_RGBA8, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV},
     [NV097_SET_TEXTURE_FORMAT_COLOR_SZ_B8G8R8A8] =
@@ -4720,13 +4729,11 @@ static void pgraph_bind_shaders(PGRAPHState *pg)
 
         state.psh.conv_tex[i] = kernel;
 
+        state.psh.tex_color_format[i] = color_format;
         state.psh.tex_channel_signs[i] = GET_MASK(filter, NV_PGRAPH_TEXFILTER0_ASIGNED |
                                                   NV_PGRAPH_TEXFILTER0_RSIGNED |
                                                   NV_PGRAPH_TEXFILTER0_GSIGNED |
                                                   NV_PGRAPH_TEXFILTER0_BSIGNED);
-
-        state.psh.yuv_tex[i] = color_format == NV097_SET_TEXTURE_FORMAT_COLOR_LC_IMAGE_CR8YB8CB8YA8 ||
-            color_format == NV097_SET_TEXTURE_FORMAT_COLOR_LC_IMAGE_YB8CR8YA8CB8;
     }
 
     uint64_t shader_state_hash = fast_hash((uint8_t*) &state, sizeof(ShaderState));
@@ -7368,11 +7375,12 @@ static uint8_t* convert_texture_data(const TextureShape s,
     case NV097_SET_TEXTURE_FORMAT_COLOR_LU_IMAGE_Y8:
         converted_data = texsigns_convert_y8(data, width, height, depth, row_pitch, slice_pitch, s.channel_signs);
         break;
+    case NV097_SET_TEXTURE_FORMAT_COLOR_SZ_Y16:
     case NV097_SET_TEXTURE_FORMAT_COLOR_LU_IMAGE_Y16:
         *out_gl_internal_format = GL_RGBA16;
         *out_gl_format = GL_RGBA;
         *out_gl_type = GL_UNSIGNED_SHORT;
-        return texsigns_convert_y16(data, width, height, depth, row_pitch, slice_pitch, s.channel_signs);
+        return texsigns_convert_y16(data, width, height, depth, row_pitch, slice_pitch);
     case NV097_SET_TEXTURE_FORMAT_COLOR_SZ_AY8:
     case NV097_SET_TEXTURE_FORMAT_COLOR_LU_IMAGE_AY8:
         converted_data = texsigns_convert_ay8(data, width, height, depth, row_pitch, slice_pitch, s.channel_signs);
@@ -7392,6 +7400,12 @@ static uint8_t* convert_texture_data(const TextureShape s,
     case NV097_SET_TEXTURE_FORMAT_COLOR_LU_IMAGE_G8B8:
         converted_data = texsigns_convert_gb88(data, width, height, depth, row_pitch, slice_pitch, s.channel_signs);
         break;
+    case NV097_SET_TEXTURE_FORMAT_COLOR_SZ_R16B16:
+    case NV097_SET_TEXTURE_FORMAT_COLOR_LU_IMAGE_R16B16:
+        *out_gl_internal_format = GL_RGBA16;
+        *out_gl_format = GL_RGBA;
+        *out_gl_type = GL_UNSIGNED_SHORT;
+        return texsigns_convert_r16b16(data, width, height, depth, row_pitch, slice_pitch);
     case NV097_SET_TEXTURE_FORMAT_COLOR_SZ_A8R8G8B8:
     case NV097_SET_TEXTURE_FORMAT_COLOR_LU_IMAGE_A8R8G8B8:
         converted_data = texsigns_convert_argb8888(data, width, height, depth, row_pitch, slice_pitch, s.channel_signs);

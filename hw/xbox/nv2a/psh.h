@@ -58,6 +58,7 @@ enum ConvolutionFilter {
 #define TEX_CHANNEL_RSIGNED 2
 #define TEX_CHANNEL_GSIGNED 4
 #define TEX_CHANNEL_BSIGNED 8
+#define TEX_CHANNEL_SIGNED_MASK 0xF
 
 typedef struct PshState {
     /* fragment shader - register combiner stuff */
@@ -74,7 +75,7 @@ typedef struct PshState {
     bool rect_tex[4];
     bool compare_mode[4][4];
     bool alphakill[4];
-    bool yuv_tex[4];
+    uint8_t tex_color_format[4];
     uint8_t tex_channel_signs[4];
     enum ConvolutionFilter conv_tex[4];
 

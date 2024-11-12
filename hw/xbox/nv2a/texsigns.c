@@ -37,56 +37,29 @@ struct conversion_info {
     (((value) << ((num_out_bits) - (num_in_bits))) |            \
      ((value) >> (2*(num_in_bits) - (num_out_bits))))
 
-#define CHANNEL_BIT_REPLICATE_SIGNED4(value) \
-    ((value) << 4) | ((value) << 1) | ((value) >> 2)
-
-static uint8_t channel_8bit_expansion(unsigned int value,
-				      bool signed_value,
-				      int num_in_bits)
+static uint8_t channel_8bit_expansion(unsigned int value, int num_in_bits)
 {
-    const int num_out_bits = 8;
-
-    if (signed_value) {
-        unsigned int sign_bit = 1 << (num_in_bits - 1);
-        if (value == sign_bit) {
-            return 0x80;
-        }
-
-	int s = -(value >> (num_in_bits - 1));
-	value = ((value ^ s) - s) & (sign_bit - 1);
-        if (num_in_bits == 4) {
-            value = CHANNEL_BIT_REPLICATE_SIGNED4(value);
-        } else {
-            value = CHANNEL_BIT_REPLICATE(value, num_in_bits - 1, num_out_bits - 1);
-        }
-	value = (value ^ s) - s;
-        return value;
-    }
-
-    return CHANNEL_BIT_REPLICATE(value, num_in_bits, num_out_bits);
+    return CHANNEL_BIT_REPLICATE(value, num_in_bits, 8);
 }
 
-static uint8_t channel_4to8_lookup[32] = { 0, };
-static uint8_t channel_5to8_lookup[64] = { 0, };
-static uint8_t channel_6to8_lookup[128] = { 0, };
+static uint8_t channel_4to8_lookup[16] = { 0, };
+static uint8_t channel_5to8_lookup[32] = { 0, };
+static uint8_t channel_6to8_lookup[64] = { 0, };
 
 void texsigns_init_conversion(void)
 {
     unsigned int i;
 
-    for (i = 0; i < sizeof(channel_4to8_lookup) / 2; i++) {
-	channel_4to8_lookup[i] = channel_8bit_expansion(i, false, 4);
-	channel_4to8_lookup[i + (sizeof(channel_4to8_lookup) / 2)] = channel_8bit_expansion(i, true, 4);
+    for (i = 0; i < sizeof(channel_4to8_lookup); i++) {
+	channel_4to8_lookup[i] = channel_8bit_expansion(i, 4);
     }
 
-    for (i = 0; i < sizeof(channel_5to8_lookup) / 2; i++) {
-	channel_5to8_lookup[i] = channel_8bit_expansion(i, false, 5);
-	channel_5to8_lookup[i + (sizeof(channel_5to8_lookup) / 2)] = channel_8bit_expansion(i, true, 5);
+    for (i = 0; i < sizeof(channel_5to8_lookup); i++) {
+	channel_5to8_lookup[i] = channel_8bit_expansion(i, 5);
     }
 
-    for (i = 0; i < sizeof(channel_6to8_lookup) / 2; i++) {
-	channel_6to8_lookup[i] = channel_8bit_expansion(i, false, 6);
-	channel_6to8_lookup[i + (sizeof(channel_6to8_lookup) / 2)] = channel_8bit_expansion(i, true, 6);
+    for (i = 0; i < sizeof(channel_6to8_lookup); i++) {
+	channel_6to8_lookup[i] = channel_8bit_expansion(i, 6);
     }
 }
 
@@ -98,9 +71,9 @@ static int convert_pixel_argb1555(const uint8_t *src, uint8_t *dest,
     unsigned int green = (argb1555 & 0x03E0) >> 5;
     unsigned int blue = argb1555 & 0x001F;
     unsigned int alpha = argb1555 >> 15;
-    dest[0] = channel_5to8_lookup[red + info->rsigned*32];
-    dest[1] = channel_5to8_lookup[green + info->gsigned*32];
-    dest[2] = channel_5to8_lookup[blue + info->bsigned*32];
+    dest[0] = channel_5to8_lookup[red];
+    dest[1] = channel_5to8_lookup[green];
+    dest[2] = channel_5to8_lookup[blue];
     dest[3] = -(int)alpha;
     return 2;
 }
@@ -112,9 +85,9 @@ static int convert_pixel_xrgb1555(const uint8_t *src, uint8_t *dest,
     unsigned int red = (rgb555 & 0x7C00) >> 10;
     unsigned int green = (rgb555 & 0x03E0) >> 5;
     unsigned int blue = rgb555 & 0x001F;
-    dest[0] = channel_5to8_lookup[red + info->rsigned*32];
-    dest[1] = channel_5to8_lookup[green + info->gsigned*32];
-    dest[2] = channel_5to8_lookup[blue + info->bsigned*32];
+    dest[0] = channel_5to8_lookup[red];
+    dest[1] = channel_5to8_lookup[green];
+    dest[2] = channel_5to8_lookup[blue];
     dest[3] = 255;
     return 2;
 }
@@ -126,10 +99,10 @@ static int convert_pixel_argb4444(const uint8_t *src, uint8_t *dest,
     unsigned int red = src[1] & 0x0F;
     unsigned int green = (src[0] & 0xF0) >> 4;
     unsigned int blue = src[0] & 0x0F;
-    dest[0] = channel_4to8_lookup[red + info->rsigned*16];
-    dest[1] = channel_4to8_lookup[green + info->gsigned*16];
-    dest[2] = channel_4to8_lookup[blue + info->bsigned*16];
-    dest[3] = channel_4to8_lookup[alpha + info->asigned*16];
+    dest[0] = channel_4to8_lookup[red];
+    dest[1] = channel_4to8_lookup[green];
+    dest[2] = channel_4to8_lookup[blue];
+    dest[3] = channel_4to8_lookup[alpha];
     return 2;
 }
 
@@ -140,9 +113,9 @@ static int convert_pixel_rgb565(const uint8_t *src, uint8_t *dest,
     unsigned int red = (rgb565 & 0xF800) >> 11;
     unsigned int green = (rgb565 & 0x07E0) >> 5;
     unsigned int blue = rgb565 & 0x001F;
-    dest[0] = channel_5to8_lookup[red + info->rsigned*32];
-    dest[1] = channel_6to8_lookup[green + info->gsigned*64];
-    dest[2] = channel_5to8_lookup[blue + info->bsigned*32];
+    dest[0] = channel_5to8_lookup[red];
+    dest[1] = channel_6to8_lookup[green];
+    dest[2] = channel_5to8_lookup[blue];
     dest[3] = 255;
     return 2;
 }
@@ -154,9 +127,9 @@ static int convert_pixel_rgb655(const uint8_t *src, uint8_t *dest,
     unsigned int red = (rgb655 & 0xFC00) >> 10;
     unsigned int green = (rgb655 & 0x03E0) >> 5;
     unsigned int blue = rgb655 & 0x001F;
-    dest[0] = channel_6to8_lookup[red + info->rsigned*64];
-    dest[1] = channel_5to8_lookup[green + info->gsigned*32];
-    dest[2] = channel_5to8_lookup[blue + info->bsigned*32];
+    dest[0] = channel_6to8_lookup[red];
+    dest[1] = channel_5to8_lookup[green];
+    dest[2] = channel_5to8_lookup[blue];
     dest[3] = 255;
     return 2;
 }
@@ -171,8 +144,7 @@ static int convert_pixel_y8(const uint8_t *src, uint8_t *dest,
     return 1;
 }
 
-static int convert_pixel_y16(const uint16_t *src, uint16_t *dest,
-                             struct conversion_info *info)
+static int convert_pixel_y16(const uint16_t *src, uint16_t *dest)
 {
     dest[0] = 65535;
     dest[1] = src[0];
@@ -219,6 +191,19 @@ static int convert_pixel_rb88(const uint8_t *src, uint8_t *dest,
     uint8_t red = src[1];
     uint8_t green = blue;
     uint8_t alpha = red;
+    dest[0] = red;
+    dest[1] = green;
+    dest[2] = blue;
+    dest[3] = alpha;
+    return 2;
+}
+
+static int convert_pixel_r16b16(const uint16_t *src, uint16_t *dest)
+{
+    uint16_t blue = src[0];
+    uint16_t red = src[1];
+    uint16_t green = blue;
+    uint16_t alpha = red;
     dest[0] = red;
     dest[1] = green;
     dest[2] = blue;
@@ -333,32 +318,20 @@ static inline uint8_t *convert(const uint8_t *data, const uint8_t *palette_data,
     return converted_data;
 }
 
-static inline uint8_t *convert_16bit(const uint8_t *data, const uint8_t *palette_data,
-                                     int width, int height, int depth,
-                                     int row_pitch, int slice_pitch, int channel_signs,
-                                     int (*convert_pixel)(const uint16_t *, uint16_t *, struct conversion_info *))
+static inline uint8_t *convert_16bit(const uint8_t *data, int width, int height, int depth,
+                                     int row_pitch, int slice_pitch,
+                                     int (*convert_pixel)(const uint16_t *, uint16_t *))
 {
     uint8_t *converted_data = (uint8_t *)g_malloc(width * height * depth * 8);
     uint16_t *pixel = (uint16_t *)converted_data;
-    struct conversion_info info = {
-        channel_signs & TEX_CHANNEL_ASIGNED,
-        channel_signs & TEX_CHANNEL_RSIGNED,
-        channel_signs & TEX_CHANNEL_GSIGNED,
-        channel_signs & TEX_CHANNEL_BSIGNED,
-        palette_data
-    };
-    uint64_t signs = (info.rsigned ? 0x8000 : 0) |
-        (info.gsigned ? 0x80000000 : 0) |
-        (info.bsigned ? 0x800000000000 : 0) |
-        (info.asigned ? 0x8000000000000000 : 0);
     int x, y, z;
 
     for (z = 0; z < depth; z++) {
 	for (y = 0; y < height; y++) {
 	    const uint16_t *row = (uint16_t *)(data + y * row_pitch);
 	    for (x = 0; x < width; x++) {
-		row += convert_pixel(row, pixel, &info);
-		*(uint64_t *)pixel ^= signs;
+		row += convert_pixel(row, pixel);
+		*(uint64_t *)pixel ^= 0x8000000080000000;
 		pixel += 4;
 	    }
 	}
@@ -440,10 +413,9 @@ uint8_t *texsigns_convert_y8(const uint8_t *data, int width, int height, int dep
 }
 
 uint8_t *texsigns_convert_y16(const uint8_t *data, int width, int height, int depth,
-                              int row_pitch, int slice_pitch, int channel_signs)
+                              int row_pitch, int slice_pitch)
 {
-    return convert_16bit(data, NULL, width, height, depth, row_pitch, slice_pitch,
-                         channel_signs,
+    return convert_16bit(data, width, height, depth, row_pitch, slice_pitch,
                          convert_pixel_y16);
 }
 
@@ -485,6 +457,13 @@ uint8_t *texsigns_convert_gb88(const uint8_t *data, int width, int height, int d
     return convert(data, NULL, width, height, depth, row_pitch, slice_pitch,
                    channel_signs,
                    convert_pixel_gb88);
+}
+
+uint8_t *texsigns_convert_r16b16(const uint8_t *data, int width, int height, int depth,
+                                 int row_pitch, int slice_pitch)
+{
+    return convert_16bit(data, width, height, depth, row_pitch, slice_pitch,
+                         convert_pixel_r16b16);
 }
 
 uint8_t *texsigns_convert_argb8888(const uint8_t *data, int width, int height, int depth,
