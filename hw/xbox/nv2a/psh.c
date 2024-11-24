@@ -793,33 +793,23 @@ static MString* psh_convert(struct PixelShader *ps)
         "    uint x = uint(round(clamp(uvalue, 0.0f, 1.0f)*65535.0f));\n"
         "    return uvec2(x & 0xFFu, x >> 8);\n"
         "}\n"
-        "float sign1(uint x) {\n"
-        "    return (float(x) - 128.0f) / 127.0f;\n"
-        "}\n"
-        "float sign2(uint x) {\n"
-        "    float fx = float(x);\n"
-        "    return (fx + 0.5f - 256.0f*step(127.5f, fx)) / 127.5f;\n"
-        "}\n"
-        "float sign3(uint x) {\n"
-        "    float fx = float(x);\n"
-        "    return (fx - 256.0f*step(127.5f, fx)) / 127.0f;\n"
-        "}\n"
         "vec3 dotmap_zero_to_one(uvec4 col) {\n"
         "    return vec3(col.rgb) / 255.0f;\n"
         "}\n"
         "vec3 dotmap_minus1_to_1_d3d(uvec4 col) {\n"
-        "    return vec3(sign1(col.r),sign1(col.g),sign1(col.b));\n"
+        "    return (vec3(col.rgb) - 128.0f) / 127.0f;\n"
         "}\n"
         "vec3 dotmap_minus1_to_1_gl(uvec4 col) {\n"
-        "    return vec3(sign2(col.r),sign2(col.g),sign2(col.b));\n"
+        "    vec3 fcol = vec3(col.rgb);\n"
+        "    return (fcol + 0.5f - 256.0f*step(127.5f, fcol)) / 127.5f;\n"
         "}\n"
         "vec3 dotmap_minus1_to_1(uvec4 col) {\n"
-        "    return vec3(sign3(col.r),sign3(col.g),sign3(col.b));\n"
+        "    vec3 fcol = vec3(col.rgb);\n"
+        "    return (fcol - 256.0f*step(127.5f, fcol)) / 127.0f;\n"
         "}\n"
         "vec3 dotmap_hilo_1(uvec4 col) {\n"
-        "    float hi = float(col.a << 8 | col.r) / 65535.0f;\n"
-        "    float lo = float(col.g << 8 | col.b) / 65535.0f;\n"
-        "    return vec3(hi, lo, 1.0f);\n"
+        "    vec2 hilo = vec2(col.a << 8 | col.r, col.g << 8 | col.b);\n"
+        "    return vec3(hilo / 65535.0f, 1.0f);\n"
         "}\n"
         "vec3 dotmap_hilo_hemisphere_d3d(uvec4 col) {\n"
         "    return vec3(col.rgb) / 255.0f;\n" // FIXME
@@ -1015,9 +1005,8 @@ static MString* psh_convert(struct PixelShader *ps)
         case PS_TEXTUREMODES_BUMPENVMAP:
             assert(i >= 1);
             mstring_append_fmt(preflight, "uniform mat2 bumpMat%d;\n", i);
-            mstring_append_fmt(vars, "vec2 dsdt%d = vec2(sign3(it%d.b), sign3(it%d.g));\n",
-                               i, ps->input_tex[i], ps->input_tex[i]);
-            mstring_append_fmt(vars, "dsdt%d = bumpMat%d * dsdt%d;\n", i, i, i);
+            mstring_append_fmt(vars, "vec2 dsdt%d = bumpMat%d * dotmap_minus1_to_1(it%d).bg;\n",
+                i, i, ps->input_tex[i]);
             mstring_append_fmt(vars, "vec4 t%d = texture(texSamp%d, texScale%d * (pT%d.xy + dsdt%d));\n",
                 i, i, i, i, i);
             post_process_texture_samples(ps, vars, i);
@@ -1027,8 +1016,8 @@ static MString* psh_convert(struct PixelShader *ps)
             mstring_append_fmt(preflight, "uniform float bumpScale%d;\n", i);
             mstring_append_fmt(preflight, "uniform float bumpOffset%d;\n", i);
             mstring_append_fmt(preflight, "uniform mat2 bumpMat%d;\n", i);
-            mstring_append_fmt(vars, "vec3 dsdtl%d = vec3(sign3(it%d.b), sign3(it%d.g), float(it%d.r)/255.0f);\n",
-                               i, ps->input_tex[i], ps->input_tex[i], ps->input_tex[i]);
+            mstring_append_fmt(vars, "vec3 dsdtl%d = vec3(dotmap_minus1_to_1(it%d).bg, float(it%d.r)/255.0f);\n",
+                i, ps->input_tex[i], ps->input_tex[i]);
             mstring_append_fmt(vars, "dsdtl%d.st = bumpMat%d * dsdtl%d.st;\n", i, i, i);
             mstring_append_fmt(vars, "vec4 t%d = texture(texSamp%d, texScale%d * (pT%d.xy + dsdtl%d.st));\n",
                 i, i, i, i, i);
@@ -1105,7 +1094,6 @@ static MString* psh_convert(struct PixelShader *ps)
                "vec3 dotSTR%d = vec3(dot%d, dot%d, dot%d);\n",
                 i, i, dotmap_func, ps->input_tex[i],
                 i, i-2, i-1, i);
-
             apply_border_adjustment(ps, vars, i, "dotSTR%d");
             mstring_append_fmt(vars, "vec4 t%d = texture(texSamp%d, dotSTR%d);\n",
                 i, i, i);
@@ -1114,10 +1102,11 @@ static MString* psh_convert(struct PixelShader *ps)
         case PS_TEXTUREMODES_DOT_STR_CUBE:
             assert(i == 3);
             mstring_append_fmt(vars, "/* PS_TEXTUREMODES_DOT_STR_CUBE */\n");
-            mstring_append_fmt(vars, "float dot%d = dot(pT%d.xyz, %s(it%d));\n",
-                i, i, dotmap_func, ps->input_tex[i]);
-            mstring_append_fmt(vars, "vec3 dotSTR%dCube = vec3(dot%d, dot%d, dot%d);\n",
-                               i, i-2, i-1, i);
+            mstring_append_fmt(vars,
+               "float dot%d = dot(pT%d.xyz, %s(it%d));\n"
+               "vec3 dotSTR%dCube = vec3(dot%d, dot%d, dot%d);\n",
+                i, i, dotmap_func, ps->input_tex[i],
+                i, i-2, i-1, i);
             apply_border_adjustment(ps, vars, i, "dotSTR%dCube");
             mstring_append_fmt(vars, "vec4 t%d = texture(texSamp%d, dotSTR%dCube);\n",
                 i, i, i);
