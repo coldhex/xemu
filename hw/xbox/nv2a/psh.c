@@ -811,14 +811,16 @@ static MString* psh_convert(struct PixelShader *ps)
         "    vec2 hilo = vec2(col.a << 8 | col.r, col.g << 8 | col.b);\n"
         "    return vec3(hilo / 65535.0f, 1.0f);\n"
         "}\n"
-        "vec3 dotmap_hilo_hemisphere_d3d(uvec4 col) {\n"
-        "    return vec3(col.rgb) / 255.0f;\n" // FIXME
-        "}\n"
-        "vec3 dotmap_hilo_hemisphere_gl(uvec4 col) {\n"
-        "    return vec3(col.rgb) / 255.0f;\n" // FIXME
-        "}\n"
         "vec3 dotmap_hilo_hemisphere(uvec4 col) {\n"
-        "    return vec3(col.rgb) / 255.0f;\n" // FIXME
+        "    vec2 hilo = vec2(col.a << 8 | col.r, col.g << 8 | col.b);\n"
+        "    hilo = (hilo - 65536.0f*step(32767.5f, hilo)) / 32767.0f;\n"
+        "    return vec3(hilo, sqrt(max(1.0f - dot(hilo, hilo), 0.0f)));\n"
+        "}\n"
+        "vec3 dotmap_hilo_hemisphere_d3d(uvec4 col) {\n" // Not supported on Xbox
+        "    return dotmap_hilo_hemisphere(col);\n"
+        "}\n"
+        "vec3 dotmap_hilo_hemisphere_gl(uvec4 col) {\n" // Not supported on Xbox
+        "    return dotmap_hilo_hemisphere(col);\n"
         "}\n"
         "const float[9] gaussian3x3 = float[9](\n"
         "    1.0/16.0, 2.0/16.0, 1.0/16.0,\n"
@@ -934,7 +936,7 @@ static MString* psh_convert(struct PixelShader *ps)
         assert(ps->dot_map[i] < 8);
         const char *dotmap_func = dotmap_funcs[ps->dot_map[i]];
         if (ps->dot_map[i] > 4) {
-            NV2A_UNIMPLEMENTED("Dot Mapping mode %s", dotmap_func);
+            NV2A_UNCONFIRMED("Dot Mapping mode %s", dotmap_func);
         }
 
         switch (ps->tex_modes[i]) {
