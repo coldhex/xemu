@@ -477,6 +477,7 @@
 #       define NV_PGRAPH_SETUPRASTER_FRONTFACEMODE_POINT            1
 #       define NV_PGRAPH_SETUPRASTER_FRONTFACEMODE_LINE             2
 #   define NV_PGRAPH_SETUPRASTER_BACKFACEMODE                   0x0000000C
+#   define NV_PGRAPH_SETUPRASTER_PSTIPPLEENABLE                 (1 << 4)
 #   define NV_PGRAPH_SETUPRASTER_POFFSETPOINTENABLE             (1 << 6)
 #   define NV_PGRAPH_SETUPRASTER_POFFSETLINEENABLE              (1 << 7)
 #   define NV_PGRAPH_SETUPRASTER_POFFSETFILLENABLE              (1 << 8)
@@ -620,6 +621,38 @@
 #define NV_PGRAPH_EYEVEC1                                0x00001AB0
 #define NV_PGRAPH_EYEVEC2                                0x00001AB4
 #define NV_PGRAPH_ZCLIPMAX                               0x00001ABC
+#define NV_PGRAPH_STIPPLE_PATTERN_0                      0x00001C00
+#define NV_PGRAPH_STIPPLE_PATTERN_1                      0x00001C04
+#define NV_PGRAPH_STIPPLE_PATTERN_2                      0x00001C08
+#define NV_PGRAPH_STIPPLE_PATTERN_3                      0x00001C0C
+#define NV_PGRAPH_STIPPLE_PATTERN_4                      0x00001C10
+#define NV_PGRAPH_STIPPLE_PATTERN_5                      0x00001C14
+#define NV_PGRAPH_STIPPLE_PATTERN_6                      0x00001C18
+#define NV_PGRAPH_STIPPLE_PATTERN_7                      0x00001C1C
+#define NV_PGRAPH_STIPPLE_PATTERN_8                      0x00001C20
+#define NV_PGRAPH_STIPPLE_PATTERN_9                      0x00001C24
+#define NV_PGRAPH_STIPPLE_PATTERN_10                     0x00001C28
+#define NV_PGRAPH_STIPPLE_PATTERN_11                     0x00001C2C
+#define NV_PGRAPH_STIPPLE_PATTERN_12                     0x00001C30
+#define NV_PGRAPH_STIPPLE_PATTERN_13                     0x00001C34
+#define NV_PGRAPH_STIPPLE_PATTERN_14                     0x00001C38
+#define NV_PGRAPH_STIPPLE_PATTERN_15                     0x00001C3C
+#define NV_PGRAPH_STIPPLE_PATTERN_16                     0x00001C40
+#define NV_PGRAPH_STIPPLE_PATTERN_17                     0x00001C44
+#define NV_PGRAPH_STIPPLE_PATTERN_18                     0x00001C48
+#define NV_PGRAPH_STIPPLE_PATTERN_19                     0x00001C4C
+#define NV_PGRAPH_STIPPLE_PATTERN_20                     0x00001C50
+#define NV_PGRAPH_STIPPLE_PATTERN_21                     0x00001C54
+#define NV_PGRAPH_STIPPLE_PATTERN_22                     0x00001C58
+#define NV_PGRAPH_STIPPLE_PATTERN_23                     0x00001C5C
+#define NV_PGRAPH_STIPPLE_PATTERN_24                     0x00001C60
+#define NV_PGRAPH_STIPPLE_PATTERN_25                     0x00001C64
+#define NV_PGRAPH_STIPPLE_PATTERN_26                     0x00001C68
+#define NV_PGRAPH_STIPPLE_PATTERN_27                     0x00001C6C
+#define NV_PGRAPH_STIPPLE_PATTERN_28                     0x00001C70
+#define NV_PGRAPH_STIPPLE_PATTERN_29                     0x00001C74
+#define NV_PGRAPH_STIPPLE_PATTERN_30                     0x00001C78
+#define NV_PGRAPH_STIPPLE_PATTERN_31                     0x00001C7C
 
 
 #define NV_PCRTC_INTR_0                                  0x00000100
@@ -1061,6 +1094,8 @@
 #   define NV097_SET_LIGHT_SPOT_DIRECTION                     0x0000104C
 #   define NV097_SET_LIGHT_LOCAL_POSITION                     0x0000105C
 #   define NV097_SET_LIGHT_LOCAL_ATTENUATION                  0x00001068
+#   define NV097_SET_STIPPLE_ENABLE                           0x0000147C
+#   define NV097_SET_STIPPLE_PATTERN                          0x00001480
 #   define NV097_SET_VERTEX4F                                 0x00001518
 #   define NV097_SET_NORMAL3F                                 0x00001530
 #   define NV097_SET_NORMAL3S                                 0x00001540

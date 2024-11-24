@@ -2328,6 +2328,19 @@ DEF_METHOD_INC(NV097, SET_LIGHT_AMBIENT_COLOR)
     }
 }
 
+DEF_METHOD(NV097, SET_STIPPLE_ENABLE)
+{
+    assert((parameter & ~1) == 0);
+    SET_MASK(pg->regs[NV_PGRAPH_SETUPRASTER],
+             NV_PGRAPH_SETUPRASTER_PSTIPPLEENABLE, parameter);
+}
+
+DEF_METHOD_INC(NV097, SET_STIPPLE_PATTERN)
+{
+    int slot = (method - NV097_SET_STIPPLE_PATTERN) / 4;
+    pg->regs[NV_PGRAPH_STIPPLE_PATTERN_0 + slot*4] = parameter;
+}
+
 DEF_METHOD_INC(NV097, SET_VERTEX4F)
 {
     int slot = (method - NV097_SET_VERTEX4F) / 4;
@@ -4209,6 +4222,13 @@ static void pgraph_shader_update_constants(PGRAPHState *pg,
         glUniform1f(binding->alpha_ref_loc, alpha_ref);
     }
 
+    if (binding->stipple_pattern_loc != -1) {
+        uint32_t pat[32];
+        for (i = 0; i < 32; i++) {
+            pat[i] = be32_to_cpu(pg->regs[NV_PGRAPH_STIPPLE_PATTERN_0 + i*4]);
+        }
+        glUniform1uiv(binding->stipple_pattern_loc, 32, pat);
+    }
 
     /* For each texture stage */
     for (i = 0; i < NV2A_MAX_TEXTURES; i++) {
@@ -4585,6 +4605,21 @@ static void pgraph_bind_shaders(PGRAPHState *pg)
                                       NV_PGRAPH_CONTROL_3_SHADEMODE) ==
                              NV_PGRAPH_CONTROL_3_SHADEMODE_SMOOTH;
     state.psh.smooth_shading = state.smooth_shading;
+
+    state.psh.stipple = (pg->primitive_mode >= NV097_SET_BEGIN_END_OP_TRIANGLES) &&
+        (state.polygon_front_mode == POLY_MODE_FILL ||
+         state.polygon_back_mode == POLY_MODE_FILL) &&
+        pg->regs[NV_PGRAPH_SETUPRASTER] & NV_PGRAPH_SETUPRASTER_PSTIPPLEENABLE;
+
+    if (state.psh.stipple && state.polygon_front_mode != state.polygon_back_mode) {
+        /* Geometry shader generator asserts if front and back mode differ.
+         * Implementing stipple when these modes differ can be done only
+         * after fixing that. Primitive type (point, line, polygon) could be
+         * passed from geometry shader to fragment shader and used to decide
+         * if polygon stipple should by applied or not.
+         */
+        NV2A_UNIMPLEMENTED("Stipple when polygon front and back mode differ.\n");
+    }
 
     state.program_length = 0;
 

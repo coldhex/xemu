@@ -869,6 +869,13 @@ static MString* psh_convert(struct PixelShader *ps)
                              "}\n");
     }
 
+    if (ps->state.stipple) {
+        mstring_append(preflight, "uniform uint stipplePattern[32];\n");
+        mstring_append(clip, "if ((stipplePattern[int(gl_FragCoord.y) & 31] & (0x80000000u >> (int(gl_FragCoord.x) & 31))) == 0u) {\n"
+                             "  discard;\n"
+                             "}\n");
+    }
+
     MString *vars = mstring_new();
     mstring_append(vars, "vec4 pD0 = vtxD0;\n");
     mstring_append(vars, "vec4 pD1 = vtxD1;\n");
