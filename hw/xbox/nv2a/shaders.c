@@ -1052,6 +1052,7 @@ void update_shader_constant_locations(ShaderBinding *binding, const ShaderState 
     }
     binding->alpha_ref_loc = glGetUniformLocation(binding->gl_program, "alphaRef");
     binding->stipple_pattern_loc = glGetUniformLocation(binding->gl_program, "stipplePattern");
+    binding->eye_vec_loc = glGetUniformLocation(binding->gl_program, "eyeVec");
 
     for (i = 1; i < NV2A_MAX_TEXTURES; i++) {
         snprintf(tmp, sizeof(tmp), "bumpMat%d", i);

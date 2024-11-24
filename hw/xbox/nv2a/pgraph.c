@@ -4230,6 +4230,15 @@ static void pgraph_shader_update_constants(PGRAPHState *pg,
         glUniform1uiv(binding->stipple_pattern_loc, 32, pat);
     }
 
+    if (binding->eye_vec_loc != -1) {
+        float v[3] = {
+            *(float*)&pg->regs[NV_PGRAPH_EYEVEC0],
+            *(float*)&pg->regs[NV_PGRAPH_EYEVEC1],
+            *(float*)&pg->regs[NV_PGRAPH_EYEVEC2]
+        };
+        glUniform3fv(binding->eye_vec_loc, 1, v);
+    }
+
     /* For each texture stage */
     for (i = 0; i < NV2A_MAX_TEXTURES; i++) {
         GLint loc;
