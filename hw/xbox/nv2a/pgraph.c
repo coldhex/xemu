@@ -1781,9 +1781,13 @@ DEF_METHOD(NV097, SET_BLEND_EQUATION)
     case NV097_SET_BLEND_EQUATION_V_MAX:
         equation = 4; break;
     case NV097_SET_BLEND_EQUATION_V_FUNC_REVERSE_SUBTRACT_SIGNED:
-        equation = 5; break;
+        equation = 5;
+        NV2A_UNIMPLEMENTED("NV097_SET_BLEND_EQUATION_V_FUNC_REVERSE_SUBTRACT_SIGNED");
+        break;
     case NV097_SET_BLEND_EQUATION_V_FUNC_ADD_SIGNED:
-        equation = 6; break;
+        equation = 6;
+        NV2A_UNIMPLEMENTED("NV097_SET_BLEND_EQUATION_V_FUNC_ADD_SIGNED");
+        break;
     default:
         NV2A_DPRINTF("Unknown blend equation: 0x%08x\n", parameter);
         return; /* discard */
@@ -3002,8 +3006,15 @@ DEF_METHOD(NV097, SET_BEGIN_END)
             GLfloat zfactor = *(float*)&pg->regs[NV_PGRAPH_ZOFFSETFACTOR];
             GLfloat zbias = *(float*)&pg->regs[NV_PGRAPH_ZOFFSETBIAS];
             glPolygonOffset(zfactor, zbias);
-            // TODO: emulate zfactor when z_perspective true, i.e. w-buffering
             pg->fragment_depth_offset = zbias;
+            if (zfactor != 0.0f && (control_0 & NV_PGRAPH_CONTROL_0_Z_PERSPECTIVE_ENABLE)) {
+                /* TODO: emulate zfactor when z_perspective true, i.e. w-buffering.
+                 * Perhaps calculate an additional offset based on triangle
+                 * orientation in geometry shader and pass the result to fragment
+                 * shader and add it to gl_FragDepth as well.
+                 */
+                NV2A_UNIMPLEMENTED("NV_PGRAPH_ZOFFSETFACTOR for w-buffering");
+            }
         } else {
             pg->fragment_depth_offset = 0.0f;
         }
