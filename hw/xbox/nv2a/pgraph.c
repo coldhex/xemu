@@ -2992,7 +2992,7 @@ DEF_METHOD(NV097, SET_BEGIN_END)
         /* Front-face select */
         glFrontFace(pg->regs[NV_PGRAPH_SETUPRASTER]
                         & NV_PGRAPH_SETUPRASTER_FRONTFACE
-                            ? GL_CCW : GL_CW);
+                            ? GL_CW : GL_CCW);
 
         /* Polygon offset */
         /* FIXME: GL implementation-specific, maybe do this in VS? */
@@ -3180,7 +3180,6 @@ DEF_METHOD(NV097, SET_BEGIN_END)
                      scissor_height = ymax - ymin + 1;
         pgraph_apply_anti_aliasing_factor(pg, &xmin, &ymin);
         pgraph_apply_anti_aliasing_factor(pg, &scissor_width, &scissor_height);
-        ymin = pg->surface_binding_dim.height - (ymin + scissor_height);
         pgraph_apply_scaling_factor(pg, &xmin, &ymin);
         pgraph_apply_scaling_factor(pg, &scissor_width, &scissor_height);
 
@@ -3723,7 +3722,6 @@ DEF_METHOD(NV097, CLEAR_SURFACE)
                  scissor_height = ymax - ymin + 1;
     pgraph_apply_anti_aliasing_factor(pg, &xmin, &ymin);
     pgraph_apply_anti_aliasing_factor(pg, &scissor_width, &scissor_height);
-    ymin = pg->surface_binding_dim.height - (ymin + scissor_height);
 
     NV2A_DPRINTF("Translated clear rect to %d,%d - %d,%d\n", xmin, ymin,
                  xmin + scissor_width - 1, ymin + scissor_height - 1);
@@ -4232,7 +4230,7 @@ static void pgraph_shader_update_constants(PGRAPHState *pg,
     if (binding->stipple_pattern_loc != -1) {
         uint32_t pat[32];
         for (i = 0; i < 32; i++) {
-            pat[i] = be32_to_cpu(pg->regs[NV_PGRAPH_STIPPLE_PATTERN_0 + i*4]);
+            pat[31 - i] = be32_to_cpu(pg->regs[NV_PGRAPH_STIPPLE_PATTERN_0 + i*4]);
         }
         glUniform1uiv(binding->stipple_pattern_loc, 32, pat);
     }
@@ -4411,12 +4409,8 @@ static void pgraph_shader_update_constants(PGRAPHState *pg,
         pgraph_apply_scaling_factor(pg, &x_min, &y_min);
         pgraph_apply_scaling_factor(pg, &x_max, &y_max);
 
-        /* Translate for the GL viewport origin */
-        int y_min_xlat = MAX((int)max_gl_height - (int)y_max, 0);
-        int y_max_xlat = MIN((int)max_gl_height - (int)y_min, max_gl_height);
-
         glUniform4i(pg->shader_binding->clip_region_loc[i],
-                    x_min, y_min_xlat, x_max, y_max_xlat);
+                    x_min, y_min, x_max, y_max);
     }
 
     if (binding->material_alpha_loc != -1) {
@@ -4923,11 +4917,7 @@ static void pgraph_init_render_to_texture(NV2AState *d)
         "layout(location = 0) out vec4 out_Color;\n"
         "void main()\n"
         "{\n"
-        "    vec2 texCoord;\n"
-        "    texCoord.x = gl_FragCoord.x;\n"
-        "    texCoord.y = (surface_size.y - gl_FragCoord.y)\n"
-        "                 + (textureSize(tex,0).y - surface_size.y);\n"
-        "    texCoord /= textureSize(tex,0).xy;\n"
+        "    vec2 texCoord = gl_FragCoord.xy / textureSize(tex, 0).xy;\n"
         "    out_Color.rgba = texture(tex, texCoord);\n"
         "}\n";
 
@@ -5063,7 +5053,7 @@ static void pgraph_render_surface_to_texture_slow(
     size_t bufsize = width * height * surface->fmt.bytes_per_pixel;
 
     uint8_t *buf = g_malloc(bufsize);
-    pgraph_download_surface_data_to_buffer(d, surface, false, true, false, buf);
+    pgraph_download_surface_data_to_buffer(d, surface, false, false, false, buf);
 
     width = texture_shape->width;
     height = texture_shape->height;
@@ -5166,7 +5156,7 @@ static void pgraph_init_display_renderer(NV2AState *d)
         "{\n"
         "    vec2 texCoord = gl_FragCoord.xy/display_size;\n"
         "    float rel = display_size.y/textureSize(tex, 0).y/line_offset;\n"
-        "    texCoord.y = 1 + rel*(texCoord.y - 1);"
+        "    texCoord.y = rel*(1.0f - texCoord.y);"
         "    out_Color.rgba = texture(tex, texCoord);\n"
         "    if (pvideo_enable) {\n"
         "        vec2 screenCoord = gl_FragCoord.xy - 0.5;\n"
@@ -5886,7 +5876,7 @@ static void pgraph_download_surface_data(NV2AState *d, SurfaceBinding *surface,
     nv2a_profile_inc_counter(NV2A_PROF_SURF_DOWNLOAD);
 
     pgraph_download_surface_data_to_buffer(
-        d, surface, true, true, true, d->vram_ptr + surface->vram_addr);
+        d, surface, true, false, true, d->vram_ptr + surface->vram_addr);
 
     memory_region_set_client_dirty(d->vram, surface->vram_addr,
                                    surface->pitch * surface->height,
@@ -6020,12 +6010,12 @@ static void pgraph_upload_surface_data(NV2AState *d, SurfaceBinding *surface,
     /* FIXME: Replace this flip/scaling */
 
     // This is VRAM so we can't do this inplace!
+    // TODO: is this copy needed anymore? Needed because of surface->pitch?
     uint8_t *flipped_buf = (uint8_t *)g_malloc(
         surface->height * surface->width * surface->fmt.bytes_per_pixel);
     unsigned int irow;
     for (irow = 0; irow < surface->height; irow++) {
-        memcpy(&flipped_buf[surface->width * (surface->height - irow - 1)
-                                 * surface->fmt.bytes_per_pixel],
+        memcpy(&flipped_buf[surface->width * irow * surface->fmt.bytes_per_pixel],
                &buf[surface->pitch * irow],
                surface->width * surface->fmt.bytes_per_pixel);
     }

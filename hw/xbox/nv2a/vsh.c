@@ -833,7 +833,6 @@ void vsh_translate(uint16_t version,
          */
         "  oPos.xy = floor(oPos.xy * 16.0f) / 16.0f;\n"
         "  oPos.xy = (2.0f * oPos.xy - surfaceSize) / surfaceSize;\n"
-        "  oPos.y = -oPos.y;\n"
 
         /* Undo perspective divide by w.
          * Note that games may also have vertex shaders that do
