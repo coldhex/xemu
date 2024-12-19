@@ -4357,27 +4357,6 @@ static void pgraph_shader_update_constants(PGRAPHState *pg,
                 glUniform3fv(loc, 1, pg->light_local_attenuation[i]);
             }
         }
-
-        /* estimate the viewport by assuming it matches the surface ... */
-        unsigned int aa_width = 1, aa_height = 1;
-        pgraph_apply_anti_aliasing_factor(pg, &aa_width, &aa_height);
-
-        float m11 = 0.5 * (pg->surface_binding_dim.width/aa_width);
-        float m22 = -0.5 * (pg->surface_binding_dim.height/aa_height);
-        float m41 = *(float*)&pg->vsh_constants[NV_IGRAPH_XF_XFCTX_VPOFF][0];
-        float m42 = *(float*)&pg->vsh_constants[NV_IGRAPH_XF_XFCTX_VPOFF][1];
-
-        float invViewport[16] = {
-            1.0/m11, 0, 0, 0,
-            0, 1.0/m22, 0, 0,
-            0, 0, 1.0, 0,
-            -1.0+m41/m11, 1.0+m42/m22, 0, 1.0
-        };
-
-        if (binding->inv_viewport_loc != -1) {
-            glUniformMatrix4fv(binding->inv_viewport_loc,
-                               1, GL_FALSE, &invViewport[0]);
-        }
     }
 
     /* update vertex program constants */

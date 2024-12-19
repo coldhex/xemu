@@ -824,18 +824,16 @@ void vsh_translate(uint16_t version,
     assert(has_final);
 
     mstring_append(body,
-        "  if (oPos.w >= 0.0) {\n"
-        "    oPos.w = clamp(oPos.w, 5.421011e-20, 1.8446744e19);\n"
-        "  } else {\n"
-        "    oPos.w = clamp(oPos.w, -1.8446744e19, -5.421011e-20);\n"
-        "  }\n"
+        "  oPos.w = (2.0f * step(0.0f, oPos.w) - 1.0f) * clamp(abs(oPos.w), 5.421011e-20, 1.8446744e19);\n"
 
-        /* the shaders leave the result in screen space, while
-         * opengl expects it in clip space.
-         * TODO: the pixel-center co-ordinate differences should handled
+        /* The shaders leave the result in screen space, while OpenGL expects it
+         * in clip space. Xbox NV2A rasterizer appears to have 4 bit precision
+         * fixed point fractional part and to convert floating point coordinates
+         * by flooring.
          */
-        "  oPos.x = 2.0 * (oPos.x - surfaceSize.x * 0.5) / surfaceSize.x;\n"
-        "  oPos.y = -2.0 * (oPos.y - surfaceSize.y * 0.5) / surfaceSize.y;\n"
+        "  oPos.xy = floor(oPos.xy * 16.0f) / 16.0f;\n"
+        "  oPos.xy = (2.0f * oPos.xy - surfaceSize) / surfaceSize;\n"
+        "  oPos.y = -oPos.y;\n"
 
         /* Undo perspective divide by w.
          * Note that games may also have vertex shaders that do

@@ -433,8 +433,6 @@ GLSL_DEFINE(eyePosition, GLSL_C(NV_IGRAPH_XF_XFCTX_EYEP))
 "\n"
 GLSL_DEFINE(sceneAmbientColor, GLSL_LTCTXA(NV_IGRAPH_XF_LTCTXA_FR_AMB) ".xyz")
 GLSL_DEFINE(materialEmissionColor, GLSL_LTCTXA(NV_IGRAPH_XF_LTCTXA_CM_COL) ".xyz")
-"\n"
-"uniform mat4 invViewport;\n"
 "\n");
 
     /* Skinning */
@@ -740,7 +738,13 @@ GLSL_DEFINE(materialEmissionColor, GLSL_LTCTXA(NV_IGRAPH_XF_LTCTXA_CM_COL) ".xyz
     }
 
     mstring_append(body,
-    "   oPos = invViewport * (tPosition * compositeMat);\n"
+    "  oPos = tPosition * compositeMat;\n"
+    "  oPos.w = (2.0f * step(0.0f, oPos.w) - 1.0f) * clamp(abs(oPos.w), 5.421011e-20, 1.8446744e19);\n"
+    "  oPos.xy = oPos.xy / oPos.w;\n"
+    "  oPos.xy += c[" stringify(NV_IGRAPH_XF_XFCTX_VPOFF) "].xy;\n"
+    "  oPos.xy = floor(oPos.xy * 16.0f) / 16.0f;\n"
+    "  oPos.xy = (2.0f * oPos.xy - surfaceSize) / surfaceSize;\n"
+    "  oPos.xy *= vec2(oPos.w, -oPos.w);\n"
     );
 
     /* FIXME: Testing */
@@ -1080,7 +1084,6 @@ void update_shader_constant_locations(ShaderBinding *binding, const ShaderState 
     binding->fog_param_loc[0] = glGetUniformLocation(binding->gl_program, "fogParam[0]");
     binding->fog_param_loc[1] = glGetUniformLocation(binding->gl_program, "fogParam[1]");
 
-    binding->inv_viewport_loc = glGetUniformLocation(binding->gl_program, "invViewport");
     for (i = 0; i < NV2A_LTCTXA_COUNT; i++) {
         snprintf(tmp, sizeof(tmp), "ltctxa[%d]", i);
         binding->ltctxa_loc[i] = glGetUniformLocation(binding->gl_program, tmp);
