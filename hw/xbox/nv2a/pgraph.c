@@ -2136,6 +2136,7 @@ DEF_METHOD_INC(NV097, SET_VIEWPORT_OFFSET)
     int slot = (method - NV097_SET_VIEWPORT_OFFSET) / 4;
     pg->vsh_constants[NV_IGRAPH_XF_XFCTX_VPOFF][slot] = parameter;
     pg->vsh_constants_dirty[NV_IGRAPH_XF_XFCTX_VPOFF] = true;
+    pg->viewport_offset[slot] = *(float*)&parameter;
 }
 
 DEF_METHOD_INC(NV097, SET_POINT_PARAMS)
@@ -4379,6 +4380,56 @@ static void pgraph_shader_update_constants(PGRAPHState *pg,
         glUniform2f(binding->surface_size_loc,
                     pg->surface_binding_dim.width / aa_width,
                     pg->surface_binding_dim.height / aa_height);
+    }
+
+    if (binding->center_compensate_loc != -1) {
+        float center_compensate = 0.0f;
+
+        /* Compensate for Direct3D 8 and hardware pixel center difference when
+         * Xemu internal resolution scaling is used. We attempt to detect how
+         * Xbox Direct3D sets up the 0.5 center difference and divide it by
+         * the scaling factor. Note that, from NV2A point of view, it is
+         * basically impossible to tell if the application/game developer
+         * intended e.g. a rectangle (0.5, 0.5)x(640.5,480.5) (that NV2A sees)
+         * to cover the entire screen or really be offset by half a pixel. When
+         * the screen resolution is 640x480, it covers the entire screen either
+         * way, but when e.g. 2x scaled to 1280x960, we need to decide if there
+         * should be or should not be a 1 pixel gap at top and left. Due to the
+         * Direct3D and OpenGL/NV2A pixel center difference of 0.5, Xbox
+         * Direct3D sets up viewport offset fractions to 0.53125 when
+         * multisample anti-aliasing is not used and to 0.03215 when
+         * multisampling is used. We compensate for the 0.53125 case. Obviously,
+         * if application/game was developed using NXDK, Direct3D conventions
+         * don't apply and the compensation method here also doesn't make sense.
+         */
+        if (pg->surface_scale_factor > 1) {
+            float xoff = pg->viewport_offset[0];
+            float yoff = pg->viewport_offset[1];
+
+            if (xoff > 0.0f && yoff > 0.0f) {
+                float xint, yint;
+                float xfrac = modff(xoff, &xint);
+                float yfrac = modff(yoff, &yint);
+
+                if (pg->surface_shape.anti_aliasing == NV097_SET_SURFACE_FORMAT_ANTI_ALIASING_CENTER_1) {
+                    if (xfrac == 0.53125f && yfrac == 0.53125f) {
+                        center_compensate = 0.5f / pg->surface_scale_factor - 0.5f;
+                    } else {
+                        NV2A_UNIMPLEMENTED("scaling and non-standard viewport offset without multisampling: %f %f",
+                                           xoff, yoff);
+                    }
+                } else {
+                    if (xfrac != 0.03125f || yfrac != 0.03125f) {
+                        NV2A_UNIMPLEMENTED("scaling and non-standard viewport offset with multisampling: %f %f",
+                                           xoff, yoff);
+                    }
+                }
+            } else if (xoff < 0.0f || yoff < 0.0f) {
+                NV2A_UNIMPLEMENTED("scaling and viewport offset for negative values: %f %f", xoff, yoff);
+            }
+        }
+
+        glUniform1f(binding->center_compensate_loc, center_compensate);
     }
 
     if (binding->clip_range_loc != -1) {

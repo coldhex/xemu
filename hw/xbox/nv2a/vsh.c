@@ -832,6 +832,7 @@ void vsh_translate(uint16_t version,
          * by flooring.
          */
         "  oPos.xy = floor(oPos.xy * 16.0f) / 16.0f;\n"
+        "  oPos.xy += centerCompensate;\n"
         "  oPos.xy = (2.0f * oPos.xy - surfaceSize) / surfaceSize;\n"
 
         /* Undo perspective divide by w.
