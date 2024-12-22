@@ -4607,7 +4607,7 @@ static void pgraph_bind_shaders(PGRAPHState *pg)
          * passed from geometry shader to fragment shader and used to decide
          * if polygon stipple should by applied or not.
          */
-        NV2A_UNIMPLEMENTED("Stipple when polygon front and back mode differ.\n");
+        NV2A_UNIMPLEMENTED("Stipple when polygon front and back mode differ.");
     }
 
     state.program_length = 0;
