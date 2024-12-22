@@ -743,7 +743,6 @@ GLSL_DEFINE(materialEmissionColor, GLSL_LTCTXA(NV_IGRAPH_XF_LTCTXA_CM_COL) ".xyz
     "  oPos.xy = oPos.xy / oPos.w;\n"
     "  oPos.xy += c[" stringify(NV_IGRAPH_XF_XFCTX_VPOFF) "].xy;\n"
     "  oPos.xy = floor(oPos.xy * 16.0f) / 16.0f;\n"
-    "  oPos.xy += centerCompensate;\n"
     "  oPos.xy = (2.0f * oPos.xy - surfaceSize) / surfaceSize;\n"
     "  oPos.xy *= oPos.w;\n"
     );
@@ -780,7 +779,6 @@ static MString *generate_vertex_shader(const ShaderState *state,
 "\n"
 "uniform vec4 fogColor;\n"
 "uniform float fogParam[2];\n"
-"uniform float centerCompensate;\n"
 "\n"
 
 GLSL_DEFINE(fogPlane, GLSL_C(NV_IGRAPH_XF_XFCTX_FOG))
@@ -1080,7 +1078,6 @@ void update_shader_constant_locations(ShaderBinding *binding, const ShaderState 
         binding->vsh_constant_loc[i] = glGetUniformLocation(binding->gl_program, tmp);
     }
     binding->surface_size_loc = glGetUniformLocation(binding->gl_program, "surfaceSize");
-    binding->center_compensate_loc = glGetUniformLocation(binding->gl_program, "centerCompensate");
     binding->clip_range_loc = glGetUniformLocation(binding->gl_program, "clipRange");
     binding->depth_offset_loc = glGetUniformLocation(binding->gl_program, "depthOffset");
     binding->fog_color_loc = glGetUniformLocation(binding->gl_program, "fogColor");

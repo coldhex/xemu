@@ -117,7 +117,6 @@ typedef struct ShaderBinding {
     GLint tex_scale_loc[NV2A_MAX_TEXTURES];
 
     GLint surface_size_loc;
-    GLint center_compensate_loc;
     GLint clip_range_loc;
     GLint depth_offset_loc;
 
