@@ -1359,6 +1359,21 @@ static MString* psh_convert(struct PixelShader *ps)
         ps->cur_stage = 8;
         mstring_append(ps->code, "// Final Combiner\n");
         add_final_stage_code(ps, ps->final_input);
+    } else {
+        bool r0_used = false;
+
+        for (int i = 0; i < ps->num_var_refs; i++) {
+            if (strcmp(ps->var_refs[i], "r0") == 0) {
+                r0_used = true;
+                break;
+            }
+        }
+
+        if (r0_used) {
+            mstring_append(ps->code, "fragColor = r0;\n");
+        } else {
+            mstring_append(ps->code, "fragColor = vec4(0.0);\n");
+        }
     }
 
     if (ps->state->alpha_test && ps->state->alpha_func != ALPHA_FUNC_ALWAYS) {
