@@ -440,6 +440,8 @@ static void upload_gl_texture(GLenum gl_target,
         adjusted_depth = MAX(16, s.depth * 2);
     }
 
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+
     switch(gl_target) {
     case GL_TEXTURE_1D:
         assert(false);
@@ -637,6 +639,8 @@ static void upload_gl_texture(GLenum gl_target,
         assert(false);
         break;
     }
+
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
 }
 
 static TextureBinding* generate_texture(const TextureShape s,
