@@ -93,7 +93,7 @@ ShaderState pgraph_get_shader_state(PGRAPHState *pg)
     }
 
     /* vertex program stuff */
-    state.vertex_program = vertex_program,
+    state.vertex_program = vertex_program;
     state.z_perspective = pgraph_reg_r(pg, NV_PGRAPH_CONTROL_0) &
                           NV_PGRAPH_CONTROL_0_Z_PERSPECTIVE_ENABLE;
     state.psh.z_perspective = state.z_perspective;
