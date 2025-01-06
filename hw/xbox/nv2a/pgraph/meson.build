@@ -5,6 +5,7 @@ specific_ss.add(files(
 	's3tc.c',
 	'shaders.c',
 	'swizzle.c',
+	'texsigns.c',
 	'texture.c',
 	'vertex.c',
 	))
