@@ -737,7 +737,9 @@ static MString* psh_convert(struct PixelShader *ps)
 
     MString *preflight = mstring_new();
     pgraph_get_glsl_vtx_header(preflight, ps->state.vulkan,
-                             ps->state.smooth_shading, true, false, false);
+                               ps->state.smooth_shading,
+                               ps->state.texture_perspective, true, false,
+                               false);
 
     if (ps->state.vulkan) {
         mstring_append_fmt(preflight,
