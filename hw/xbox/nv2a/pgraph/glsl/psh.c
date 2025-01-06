@@ -832,6 +832,10 @@ static MString* psh_convert(struct PixelShader *ps)
                                   "%svec4  clipRange;\n"
                                   "%sfloat depthOffset;\n",
                                   u, u, u, u, u);
+    if (ps->state.stipple) {
+        mstring_append_fmt(preflight, "%suint  stipplePattern[32];\n", u);
+    }
+
     for (int i = 0; i < 4; i++) {
         mstring_append_fmt(preflight, "%smat2  bumpMat%d;\n"
                                       "%sfloat bumpScale%d;\n"
@@ -977,6 +981,12 @@ static MString* psh_convert(struct PixelShader *ps)
                           "}\n");
             }
         }
+    }
+
+    if (ps->state.stipple) {
+        mstring_append(clip, "if ((stipplePattern[int(gl_FragCoord.y) & 31] & (0x80000000u >> (int(gl_FragCoord.x) & 31))) == 0u) {\n"
+                             "  discard;\n"
+                             "}\n");
     }
 
     MString *vars = mstring_new();
