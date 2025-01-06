@@ -26,11 +26,12 @@ const char *uniform_element_type_to_str[] = {
 };
 
 MString *pgraph_glsl_get_vtx_header(MString *out, bool location, bool smooth,
-                                    bool in, bool prefix, bool array)
+                                    bool perspective_correct, bool in,
+                                    bool prefix, bool array)
 {
-    const char *smooth_s = "";
+    const char *tex_qual_s = perspective_correct ? "" : "noperspective ";
     const char *flat_s = "flat ";
-    const char *qualifier_s = smooth ? smooth_s : flat_s;
+    const char *qualifier_s = smooth ? tex_qual_s : flat_s;
     const char *in_out_s = in ? "in" : "out";
     const char *float_s = "float";
     const char *vec4_s = "vec4";
@@ -43,11 +44,11 @@ MString *pgraph_glsl_get_vtx_header(MString *out, bool location, bool smooth,
         { qualifier_s, vec4_s,  "vtxD1"  },
         { qualifier_s, vec4_s,  "vtxB0"  },
         { qualifier_s, vec4_s,  "vtxB1"  },
-        { smooth_s,    float_s, "vtxFog" },
-        { smooth_s,    vec4_s,  "vtxT0"  },
-        { smooth_s,    vec4_s,  "vtxT1"  },
-        { smooth_s,    vec4_s,  "vtxT2"  },
-        { smooth_s,    vec4_s,  "vtxT3"  },
+        { tex_qual_s,  float_s, "vtxFog" },
+        { tex_qual_s,  vec4_s,  "vtxT0"  },
+        { tex_qual_s,  vec4_s,  "vtxT1"  },
+        { tex_qual_s,  vec4_s,  "vtxT2"  },
+        { tex_qual_s,  vec4_s,  "vtxT3"  },
         { flat_s,      vec4_s,  "vtxPos0" },
         { flat_s,      vec4_s,  "vtxPos1" },
         { flat_s,      vec4_s,  "vtxPos2" },
