@@ -219,6 +219,7 @@ static void generate_shaders(ShaderBinding *binding)
                                  state->polygon_back_mode,
                                  state->primitive_mode,
                                  state->smooth_shading,
+                                 state->texture_perspective,
                                  false);
     if (geometry_shader_code) {
         const char* geometry_shader_code_str =

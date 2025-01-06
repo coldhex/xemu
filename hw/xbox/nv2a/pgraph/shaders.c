@@ -115,6 +115,10 @@ ShaderState pgraph_get_shader_state(PGRAPHState *pg)
     state.polygon_back_mode = (enum ShaderPolygonMode)GET_MASK(
         pgraph_reg_r(pg, NV_PGRAPH_SETUPRASTER), NV_PGRAPH_SETUPRASTER_BACKFACEMODE);
 
+    state.texture_perspective = pgraph_reg_r(pg, NV_PGRAPH_CONTROL_3) &
+                                NV_PGRAPH_CONTROL_3_TEXTURE_PERSPECTIVE_ENABLE;
+    state.psh.texture_perspective = state.texture_perspective;
+
     state.smooth_shading = GET_MASK(pgraph_reg_r(pg, NV_PGRAPH_CONTROL_3),
                                     NV_PGRAPH_CONTROL_3_SHADEMODE) ==
                            NV_PGRAPH_CONTROL_3_SHADEMODE_SMOOTH;

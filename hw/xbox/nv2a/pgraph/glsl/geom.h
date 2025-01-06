@@ -28,7 +28,7 @@
 MString *pgraph_gen_geom_glsl(enum ShaderPolygonMode polygon_front_mode,
                               enum ShaderPolygonMode polygon_back_mode,
                               enum ShaderPrimitiveMode primitive_mode,
-                              bool smooth_shading,
+                              bool smooth_shading, bool perspective_correct,
                               bool vulkan);
 
 #endif
