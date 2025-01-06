@@ -54,6 +54,7 @@ typedef struct PshState {
     uint32_t rgb_inputs[8], rgb_outputs[8];
     uint32_t alpha_inputs[8], alpha_outputs[8];
 
+    bool stipple;
     bool point_sprite;
     bool rect_tex[4];
     bool compare_mode[4][4];
@@ -99,6 +100,7 @@ void pgraph_glsl_set_psh_state(PGRAPHState *pg, PshState *state);
     DECL(S, depthFactor, float, 1)  \
     DECL(S, depthOffset, float, 1)  \
     DECL(S, fogColor, vec4, 1)      \
+    DECL(S, stipplePattern, uint, 32) \
     DECL(S, surfaceScale, ivec2, 1) \
     DECL(S, texScale, float, 4)
 
