@@ -98,6 +98,7 @@ typedef struct ShaderBinding {
 
     GLint psh_constant_loc[9][2];
     GLint alpha_ref_loc;
+    GLint stipple_pattern_loc;
 
     GLint bump_mat_loc[NV2A_MAX_TEXTURES];
     GLint bump_scale_loc[NV2A_MAX_TEXTURES];
