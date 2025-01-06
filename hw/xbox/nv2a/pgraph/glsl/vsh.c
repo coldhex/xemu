@@ -139,6 +139,9 @@ void pgraph_glsl_set_vsh_state(PGRAPHState *pg, VshState *vsh)
         }
     }
 
+    vsh->texture_perspective = pgraph_reg_r(pg, NV_PGRAPH_CONTROL_3) &
+                               NV_PGRAPH_CONTROL_3_TEXTURE_PERSPECTIVE_ENABLE;
+
     vsh->smooth_shading = GET_MASK(pgraph_reg_r(pg, NV_PGRAPH_CONTROL_3),
                                    NV_PGRAPH_CONTROL_3_SHADEMODE) ==
                           NV_PGRAPH_CONTROL_3_SHADEMODE_SMOOTH;
@@ -232,7 +235,8 @@ MString *pgraph_glsl_gen_vsh(const VshState *state, GenVshGlslOptions opts)
         "}\n");
 
     pgraph_glsl_get_vtx_header(header, opts.vulkan, state->smooth_shading,
-                               false, opts.prefix_outputs, false);
+                               state->texture_perspective, false,
+                               opts.prefix_outputs, false);
 
     if (opts.prefix_outputs) {
         mstring_append(header,

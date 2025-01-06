@@ -29,6 +29,7 @@ typedef struct {
     enum ShaderPrimitiveMode primitive_mode;
     enum ShaderPolygonMode polygon_front_mode;
     enum ShaderPolygonMode polygon_back_mode;
+    bool texture_perspective;
     bool smooth_shading;
     bool first_vertex_is_provoking;
     bool z_perspective;

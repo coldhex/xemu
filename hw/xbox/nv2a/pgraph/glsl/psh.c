@@ -82,6 +82,9 @@ void pgraph_glsl_set_psh_state(PGRAPHState *pg, PshState *state)
     state->z_perspective = pgraph_reg_r(pg, NV_PGRAPH_CONTROL_0) &
                            NV_PGRAPH_CONTROL_0_Z_PERSPECTIVE_ENABLE;
 
+    state->texture_perspective = pgraph_reg_r(pg, NV_PGRAPH_CONTROL_3) &
+                                 NV_PGRAPH_CONTROL_3_TEXTURE_PERSPECTIVE_ENABLE;
+
     state->smooth_shading = GET_MASK(pgraph_reg_r(pg, NV_PGRAPH_CONTROL_3),
                                      NV_PGRAPH_CONTROL_3_SHADEMODE) ==
                             NV_PGRAPH_CONTROL_3_SHADEMODE_SMOOTH;
@@ -799,7 +802,9 @@ static MString* psh_convert(struct PixelShader *ps)
 {
     MString *preflight = mstring_new();
     pgraph_glsl_get_vtx_header(preflight, ps->opts.vulkan,
-                             ps->state->smooth_shading, true, false, false);
+                             ps->state->smooth_shading,
+                             ps->state->texture_perspective, true, false,
+                             false);
 
     if (ps->opts.vulkan) {
         mstring_append_fmt(
