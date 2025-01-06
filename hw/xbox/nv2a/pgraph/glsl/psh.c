@@ -944,14 +944,16 @@ static MString* psh_convert(struct PixelShader *ps)
         "    vec2 hilo = vec2(col.a << 8 | col.r, col.g << 8 | col.b);\n"
         "    return vec3(hilo / 65535.0f, 1.0f);\n"
         "}\n"
-        "vec3 dotmap_hilo_hemisphere_d3d(uvec4 col) {\n"
-        "    return vec3(col.rgb) / 255.0f;\n" // FIXME
-        "}\n"
-        "vec3 dotmap_hilo_hemisphere_gl(uvec4 col) {\n"
-        "    return vec3(col.rgb) / 255.0f;\n" // FIXME
-        "}\n"
         "vec3 dotmap_hilo_hemisphere(uvec4 col) {\n"
-        "    return vec3(col.rgb) / 255.0f;\n" // FIXME
+        "    vec2 hilo = vec2(col.a << 8 | col.r, col.g << 8 | col.b);\n"
+        "    hilo = (hilo - 65536.0f*step(32767.5f, hilo)) / 32767.0f;\n"
+        "    return vec3(hilo, sqrt(max(1.0f - dot(hilo, hilo), 0.0f)));\n"
+        "}\n"
+        "vec3 dotmap_hilo_hemisphere_d3d(uvec4 col) {\n" // Not supported on Xbox
+        "    return dotmap_hilo_hemisphere(col);\n"
+        "}\n"
+        "vec3 dotmap_hilo_hemisphere_gl(uvec4 col) {\n" // Not supported on Xbox
+        "    return dotmap_hilo_hemisphere(col);\n"
         "}\n"
         // Kahan's algorithm for computing determinant using FMA for higher
         // precision. See e.g.:
@@ -1107,7 +1109,7 @@ static MString* psh_convert(struct PixelShader *ps)
         assert(ps->dot_map[i] < 8);
         const char *dotmap_func = dotmap_funcs[ps->dot_map[i]];
         if (ps->dot_map[i] > 4) {
-            NV2A_UNIMPLEMENTED("Dot Mapping mode %s", dotmap_func);
+            NV2A_UNCONFIRMED("Dot Mapping mode %s", dotmap_func);
         }
 
         if ((ps->state->tex_channel_signs[i] & TEX_CHANNEL_SIGNED_MASK) && !signed_channel_in_preflight) {
