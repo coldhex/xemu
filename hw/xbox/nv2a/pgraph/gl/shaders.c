@@ -133,6 +133,8 @@ static void update_shader_constant_locations(ShaderBinding *binding)
         }
     }
     binding->alpha_ref_loc = glGetUniformLocation(binding->gl_program, "alphaRef");
+    binding->stipple_pattern_loc = glGetUniformLocation(binding->gl_program, "stipplePattern");
+
     for (int i = 1; i < NV2A_MAX_TEXTURES; i++) {
         snprintf(tmp, sizeof(tmp), "bumpMat%d", i);
         binding->bump_mat_loc[i] = glGetUniformLocation(binding->gl_program, tmp);
@@ -719,6 +721,14 @@ static void shader_update_constants(PGRAPHState *pg, ShaderBinding *binding,
         glUniform1i(binding->alpha_ref_loc, alpha_ref);
     }
 
+    if (binding->stipple_pattern_loc != -1) {
+        uint32_t pat[32];
+        for (i = 0; i < 32; i++) {
+            pat[i] = be32_to_cpu(pgraph_reg_r(pg,
+                                     NV_PGRAPH_STIPPLE_PATTERN_0 + i * 4));
+        }
+        glUniform1uiv(binding->stipple_pattern_loc, 32, pat);
+    }
 
     /* For each texture stage */
     for (i = 0; i < NV2A_MAX_TEXTURES; i++) {
