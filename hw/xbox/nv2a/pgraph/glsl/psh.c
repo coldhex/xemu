@@ -94,6 +94,31 @@ void pgraph_glsl_set_psh_state(PGRAPHState *pg, PshState *state)
                  NV_PGRAPH_ZCOMPRESSOCCLUDE_ZCLAMP_EN) ==
         NV_PGRAPH_ZCOMPRESSOCCLUDE_ZCLAMP_EN_CULL;
 
+    enum ShaderPolygonMode polygon_front_mode =
+        (enum ShaderPolygonMode)GET_MASK(
+            pgraph_reg_r(pg, NV_PGRAPH_SETUPRASTER),
+            NV_PGRAPH_SETUPRASTER_FRONTFACEMODE);
+    enum ShaderPolygonMode polygon_back_mode = (enum ShaderPolygonMode)GET_MASK(
+        pgraph_reg_r(pg, NV_PGRAPH_SETUPRASTER),
+        NV_PGRAPH_SETUPRASTER_BACKFACEMODE);
+
+    state->stipple = (pg->primitive_mode >= NV097_SET_BEGIN_END_OP_TRIANGLES) &&
+                     (polygon_front_mode == POLY_MODE_FILL ||
+                      polygon_back_mode == POLY_MODE_FILL) &&
+                     (pgraph_reg_r(pg, NV_PGRAPH_SETUPRASTER) &
+                      NV_PGRAPH_SETUPRASTER_PSTIPPLEENABLE);
+
+    if (state->stipple && polygon_front_mode != polygon_back_mode) {
+        /* Geometry shader generator asserts if front and back mode differ.
+         * Implementing stipple when these modes differ can be done only
+         * after fixing that. Primitive type (point, line, polygon) could be
+         * passed from geometry shader to fragment shader and used to decide
+         * if polygon stipple should by applied or not.
+         */
+        NV2A_UNIMPLEMENTED(
+            "Stipple when polygon front and back mode differ.\n");
+    }
+
     int num_stages = pgraph_reg_r(pg, NV_PGRAPH_COMBINECTL) & 0xFF;
     for (int i = 0; i < num_stages; i++) {
         state->rgb_inputs[i] =
@@ -1073,6 +1098,14 @@ static MString* psh_convert(struct PixelShader *ps)
             clip, "zvalue = clamp(zvalue, clipRange.z, clipRange.w);\n");
     }
 
+    if (ps->state->stipple) {
+        mstring_append(
+            clip,
+            "if ((stipplePattern[int(gl_FragCoord.y) & 31] & (0x80000000u >> (int(gl_FragCoord.x) & 31))) == 0u) {\n"
+            "  discard;\n"
+            "}\n");
+    }
+
     MString *vars = mstring_new();
     mstring_append(vars, "vec4 pD0 = vtxD0;\n");
     mstring_append(vars, "vec4 pD1 = vtxD1;\n");
@@ -1771,6 +1804,13 @@ void pgraph_glsl_set_psh_uniform_values(PGRAPHState *pg,
         }
 
         values->depthFactor[0] = zfactor;
+    }
+
+    if (locs[PshUniform_stipplePattern] != -1) {
+        for (int i = 0; i < 32; i++) {
+            values->stipplePattern[31 - i] = be32_to_cpu(
+                pgraph_reg_r(pg, NV_PGRAPH_STIPPLE_PATTERN_0 + i * 4));
+        }
     }
 
     if (locs[PshUniform_surfaceScale] != -1) {
