@@ -1410,9 +1410,13 @@ DEF_METHOD(NV097, SET_BLEND_EQUATION)
     case NV097_SET_BLEND_EQUATION_V_MAX:
         equation = 4; break;
     case NV097_SET_BLEND_EQUATION_V_FUNC_REVERSE_SUBTRACT_SIGNED:
-        equation = 5; break;
+        equation = 5;
+        NV2A_UNIMPLEMENTED("NV097_SET_BLEND_EQUATION_V_FUNC_REVERSE_SUBTRACT_SIGNED");
+        break;
     case NV097_SET_BLEND_EQUATION_V_FUNC_ADD_SIGNED:
-        equation = 6; break;
+        equation = 6;
+        NV2A_UNIMPLEMENTED("NV097_SET_BLEND_EQUATION_V_FUNC_ADD_SIGNED");
+        break;
     default:
         NV2A_DPRINTF("Unknown blend equation: 0x%08x\n", parameter);
         return; /* discard */
