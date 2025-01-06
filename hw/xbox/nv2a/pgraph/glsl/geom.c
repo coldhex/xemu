@@ -34,6 +34,9 @@ void pgraph_glsl_set_geom_state(PGRAPHState *pg, GeomState *state)
         pgraph_reg_r(pg, NV_PGRAPH_SETUPRASTER),
         NV_PGRAPH_SETUPRASTER_BACKFACEMODE);
 
+    state->texture_perspective = pgraph_reg_r(pg, NV_PGRAPH_CONTROL_3) &
+                                 NV_PGRAPH_CONTROL_3_TEXTURE_PERSPECTIVE_ENABLE;
+
     state->smooth_shading = GET_MASK(pgraph_reg_r(pg, NV_PGRAPH_CONTROL_3),
                                      NV_PGRAPH_CONTROL_3_SHADEMODE) ==
                             NV_PGRAPH_CONTROL_3_SHADEMODE_SMOOTH;
@@ -305,10 +308,10 @@ MString *pgraph_glsl_gen_geom(const GeomState *state, GenGeomGlslOptions opts)
                          "#define v_vtxPos v_vtxPos0\n"
                          "\n",
                          opts.vulkan ? 450 : 400, layout_in, layout_out);
-    pgraph_glsl_get_vtx_header(output, opts.vulkan, state->smooth_shading, true,
-                               true, true);
     pgraph_glsl_get_vtx_header(output, opts.vulkan, state->smooth_shading,
-                               false, false, false);
+                               state->texture_perspective, true, true, true);
+    pgraph_glsl_get_vtx_header(output, opts.vulkan, state->smooth_shading,
+                               state->texture_perspective, false, false, false);
 
     char vertex_order_buf[80];
     const char *vertex_order_body = "";

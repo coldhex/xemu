@@ -474,6 +474,7 @@
 #   define NV_PGRAPH_CONTROL_3_PROVOKING_VERTEX                 (1 << 0)
 #       define NV_PGRAPH_CONTROL_3_PROVOKING_VERTEX_LAST            0
 #       define NV_PGRAPH_CONTROL_3_PROVOKING_VERTEX_FIRST           1
+#   define NV_PGRAPH_CONTROL_3_TEXTURE_PERSPECTIVE_ENABLE       (1 << 6)
 #   define NV_PGRAPH_CONTROL_3_SHADEMODE                        (1 << 7)
 #       define NV_PGRAPH_CONTROL_3_SHADEMODE_FLAT                   0
 #       define NV_PGRAPH_CONTROL_3_SHADEMODE_SMOOTH                 1
@@ -893,6 +894,7 @@
 #       define NV097_SET_CONTROL0_STENCIL_WRITE_ENABLE            (1 << 0)
 #       define NV097_SET_CONTROL0_Z_FORMAT                        (1 << 12)
 #       define NV097_SET_CONTROL0_Z_PERSPECTIVE_ENABLE            (1 << 16)
+#       define NV097_SET_CONTROL0_TEXTURE_PERSPECTIVE_ENABLE      (1 << 20)
 #   define NV097_SET_LIGHT_CONTROL                            0x00000294
 #       define NV097_SET_LIGHT_CONTROL_SEPARATE_SPECULAR          1
 #       define NV097_SET_LIGHT_CONTROL_LOCALEYE                   (1 << 16)
