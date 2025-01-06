@@ -2011,6 +2011,19 @@ DEF_METHOD_INC(NV097, SET_LIGHT_AMBIENT_COLOR)
     }
 }
 
+DEF_METHOD(NV097, SET_STIPPLE_ENABLE)
+{
+    assert((parameter & ~1) == 0);
+    PG_SET_MASK(NV_PGRAPH_SETUPRASTER, NV_PGRAPH_SETUPRASTER_PSTIPPLEENABLE,
+             parameter);
+}
+
+DEF_METHOD_INC(NV097, SET_STIPPLE_PATTERN)
+{
+    int slot = (method - NV097_SET_STIPPLE_PATTERN) / 4;
+    pgraph_reg_w(pg, NV_PGRAPH_STIPPLE_PATTERN_0 + slot * 4, parameter);
+}
+
 DEF_METHOD_INC(NV097, SET_VERTEX4F)
 {
     int slot = (method - NV097_SET_VERTEX4F) / 4;

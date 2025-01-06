@@ -128,6 +128,21 @@ ShaderState pgraph_get_shader_state(PGRAPHState *pg)
                                         NV_PGRAPH_ZCOMPRESSOCCLUDE_ZCLAMP_EN) ==
                                NV_PGRAPH_ZCOMPRESSOCCLUDE_ZCLAMP_EN_CULL;
 
+    state.psh.stipple = (pg->primitive_mode >= NV097_SET_BEGIN_END_OP_TRIANGLES) &&
+        (state.polygon_front_mode == POLY_MODE_FILL ||
+         state.polygon_back_mode == POLY_MODE_FILL) &&
+        (pgraph_reg_r(pg, NV_PGRAPH_SETUPRASTER) & NV_PGRAPH_SETUPRASTER_PSTIPPLEENABLE);
+
+    if (state.psh.stipple && state.polygon_front_mode != state.polygon_back_mode) {
+        /* Geometry shader generator asserts if front and back mode differ.
+         * Implementing stipple when these modes differ can be done only
+         * after fixing that. Primitive type (point, line, polygon) could be
+         * passed from geometry shader to fragment shader and used to decide
+         * if polygon stipple should by applied or not.
+         */
+        NV2A_UNIMPLEMENTED("Stipple when polygon front and back mode differ.\n");
+    }
+
     state.program_length = 0;
 
     if (vertex_program) {
