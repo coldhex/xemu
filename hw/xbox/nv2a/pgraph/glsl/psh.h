@@ -50,8 +50,8 @@ typedef struct PshState {
     bool compare_mode[4][4];
     bool alphakill[4];
     int colorkey_mode[4];
+    uint8_t tex_color_format[4];
     enum ConvolutionFilter conv_tex[4];
-    bool tex_x8y24[4];
     int dim_tex[4];
 
     float border_logical_size[4][3];
