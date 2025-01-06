@@ -220,8 +220,6 @@ ShaderState pgraph_get_shader_state(PGRAPHState *pg)
         unsigned int color_format = GET_MASK(tex_fmt, NV_PGRAPH_TEXFMT0_COLOR);
         BasicColorFormatInfo f = kelvin_color_format_info_map[color_format];
         state.psh.rect_tex[i] = f.linear;
-        state.psh.tex_x8y24[i] = color_format == NV097_SET_TEXTURE_FORMAT_COLOR_LU_IMAGE_DEPTH_X8_Y24_FIXED ||
-                                color_format == NV097_SET_TEXTURE_FORMAT_COLOR_LU_IMAGE_DEPTH_X8_Y24_FLOAT;
 
         uint32_t border_source =
             GET_MASK(tex_fmt, NV_PGRAPH_TEXFMT0_BORDER_SOURCE);
