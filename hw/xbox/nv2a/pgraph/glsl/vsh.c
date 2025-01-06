@@ -84,7 +84,8 @@ MString *pgraph_gen_vsh_glsl(const ShaderState *state, bool prefix_outputs)
         "}\n");
 
     pgraph_get_glsl_vtx_header(header, state->vulkan, state->smooth_shading,
-                             false, prefix_outputs, false);
+                               state->texture_perspective, false,
+                               prefix_outputs, false);
 
     if (prefix_outputs) {
         mstring_append(header,
