@@ -21,14 +21,15 @@
 #include "common.h"
 
 
-MString *pgraph_get_glsl_vtx_header(MString *out, bool location, bool smooth, bool in, bool prefix, bool array)
+MString *pgraph_get_glsl_vtx_header(MString *out, bool location, bool smooth,
+                                    bool perspective_correct, bool in,
+                                    bool prefix, bool array)
 {
-    const char *flat_s = "flat ";
-    const char *smooth_s = "";
-    const char *qualifier_s = smooth ? smooth_s : flat_s;
+    const char *tex_qual_s = perspective_correct ? "" : "noperspective ";
+    const char *qualifier_s = smooth ? tex_qual_s : "flat ";
     const char *qualifiers[9] = { qualifier_s, qualifier_s, qualifier_s,
-                                  qualifier_s, smooth_s,    smooth_s,
-                                  smooth_s,    smooth_s,    smooth_s };
+                                  qualifier_s, tex_qual_s,  tex_qual_s,
+                                  tex_qual_s,  tex_qual_s,  tex_qual_s };
 
     const char *in_out_s = in ? "in" : "out";
 
