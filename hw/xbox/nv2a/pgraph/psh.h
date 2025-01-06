@@ -81,7 +81,6 @@ typedef struct PshState {
     uint8_t tex_color_format[4];
     uint8_t tex_channel_signs[4];
     enum ConvolutionFilter conv_tex[4];
-    bool tex_x8y24[4];
     int dim_tex[4];
 
     float border_logical_size[4][3];

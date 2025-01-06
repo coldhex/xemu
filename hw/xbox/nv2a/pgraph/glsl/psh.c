@@ -562,6 +562,12 @@ static void add_final_stage_code(struct PixelShader *ps, struct FCInputInfo fina
     ps->varE = ps->varF = NULL;
 }
 
+static bool is_x8y24_format(uint8_t color_format)
+{
+    return color_format == NV097_SET_TEXTURE_FORMAT_COLOR_LU_IMAGE_DEPTH_X8_Y24_FIXED ||
+        color_format == NV097_SET_TEXTURE_FORMAT_COLOR_LU_IMAGE_DEPTH_X8_Y24_FLOAT;
+}
+
 static const char *get_sampler_type(enum PS_TEXTUREMODES mode, const PshState *state, int i)
 {
     const char *sampler2D = "sampler2D";
@@ -577,7 +583,7 @@ static const char *get_sampler_type(enum PS_TEXTUREMODES mode, const PshState *s
 
     case PS_TEXTUREMODES_PROJECT2D:
         if (state->dim_tex[i] == 2) {
-            if (state->tex_x8y24[i] && state->vulkan) {
+            if (state->vulkan && is_x8y24_format(state->tex_color_format[i])) {
                 return "usampler2D";
             }
             return sampler2D;
@@ -600,7 +606,7 @@ static const char *get_sampler_type(enum PS_TEXTUREMODES mode, const PshState *s
 
     case PS_TEXTUREMODES_PROJECT3D:
     case PS_TEXTUREMODES_DOT_STR_3D:
-        if (state->tex_x8y24[i] && state->vulkan) {
+        if (state->vulkan && is_x8y24_format(state->tex_color_format[i])) {
             return "usampler2D";
         }
         if (state->shadow_map[i]) {
@@ -659,7 +665,8 @@ static void psh_append_shadowmap(const struct PixelShader *ps, int i, bool compa
 
     const char *comparison = shadow_comparison_map[ps->state.shadow_depth_func];
 
-    bool extract_msb_24b = ps->state.tex_x8y24[i] && ps->state.vulkan;
+    bool extract_msb_24b = ps->state.vulkan &&
+        is_x8y24_format(ps->state.tex_color_format[i]);
 
     mstring_append_fmt(
         vars, "%svec4 t%d_depth%s = textureProj(texSamp%d, %s(pT%d.xyw));\n",
