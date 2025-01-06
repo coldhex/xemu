@@ -51,6 +51,16 @@ enum ConvolutionFilter {
     CONVOLUTION_FILTER_GAUSSIAN,
 };
 
+/* These are the most significant nibble of NV097_SET_TEXTURE_FILTER
+ * i.e. NV097_SET_TEXTURE_FILTER_ASIGNED, NV097_SET_TEXTURE_FILTER_RSIGNED,
+ * NV097_SET_TEXTURE_FILTER_GSIGNED and NV097_SET_TEXTURE_FILTER_BSIGNED.
+ */
+#define TEX_CHANNEL_ASIGNED 1
+#define TEX_CHANNEL_RSIGNED 2
+#define TEX_CHANNEL_GSIGNED 4
+#define TEX_CHANNEL_BSIGNED 8
+#define TEX_CHANNEL_SIGNED_MASK 0xF
+
 typedef struct PshState {
     bool vulkan;
 
@@ -66,9 +76,10 @@ typedef struct PshState {
 
     bool point_sprite;
     bool rect_tex[4];
-    bool snorm_tex[4];
     bool compare_mode[4][4];
     bool alphakill[4];
+    uint8_t tex_color_format[4];
+    uint8_t tex_channel_signs[4];
     enum ConvolutionFilter conv_tex[4];
     bool tex_x8y24[4];
     int dim_tex[4];
