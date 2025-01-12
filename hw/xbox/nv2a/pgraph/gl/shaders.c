@@ -134,6 +134,7 @@ static void update_shader_constant_locations(ShaderBinding *binding)
     }
     binding->alpha_ref_loc = glGetUniformLocation(binding->gl_program, "alphaRef");
     binding->stipple_pattern_loc = glGetUniformLocation(binding->gl_program, "stipplePattern");
+    binding->eye_vec_loc = glGetUniformLocation(binding->gl_program, "eyeVec");
 
     for (int i = 1; i < NV2A_MAX_TEXTURES; i++) {
         snprintf(tmp, sizeof(tmp), "bumpMat%d", i);
@@ -728,6 +729,15 @@ static void shader_update_constants(PGRAPHState *pg, ShaderBinding *binding,
                                      NV_PGRAPH_STIPPLE_PATTERN_0 + i * 4));
         }
         glUniform1uiv(binding->stipple_pattern_loc, 32, pat);
+    }
+
+    if (binding->eye_vec_loc != -1) {
+        uint32_t v[3] = {
+            pgraph_reg_r(pg, NV_PGRAPH_EYEVEC0),
+            pgraph_reg_r(pg, NV_PGRAPH_EYEVEC1),
+            pgraph_reg_r(pg, NV_PGRAPH_EYEVEC2)
+        };
+        glUniform3fv(binding->eye_vec_loc, 1, (float *)v);
     }
 
     /* For each texture stage */

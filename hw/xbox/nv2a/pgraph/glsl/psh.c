@@ -617,6 +617,7 @@ static const char *get_sampler_type(enum PS_TEXTUREMODES mode, const PshState *s
     case PS_TEXTUREMODES_CUBEMAP:
     case PS_TEXTUREMODES_DOT_RFLCT_DIFF:
     case PS_TEXTUREMODES_DOT_RFLCT_SPEC:
+    case PS_TEXTUREMODES_DOT_RFLCT_SPEC_CONST:
     case PS_TEXTUREMODES_DOT_STR_CUBE:
         if (state->shadow_map[i]) {
             fprintf(stderr, "Shadow map support not implemented for mode %d\n", mode);
@@ -830,8 +831,9 @@ static MString* psh_convert(struct PixelShader *ps)
                                   "%svec4  fogColor;\n"
                                   "%sivec4 clipRegion[8];\n"
                                   "%svec4  clipRange;\n"
-                                  "%sfloat depthOffset;\n",
-                                  u, u, u, u, u);
+                                  "%sfloat depthOffset;\n"
+                                  "%svec3  eyeVec;\n",
+                                  u, u, u, u, u, u);
     if (ps->state.stipple) {
         mstring_append_fmt(preflight, "%suint  stipplePattern[32];\n", u);
     }
@@ -1275,10 +1277,17 @@ static MString* psh_convert(struct PixelShader *ps)
             break;
         case PS_TEXTUREMODES_DOT_RFLCT_SPEC_CONST:
             assert(i == 3);
-            mstring_append_fmt(vars, "vec4 t%d = vec4(0.0); /* PS_TEXTUREMODES_DOT_RFLCT_SPEC_CONST */\n",
-                               i);
-            NV2A_UNIMPLEMENTED("PS_TEXTUREMODES_DOT_RFLCT_SPEC_CONST");
-            set_stage_result_from_rgba(ps, vars, i);
+            mstring_append_fmt(vars, "/* PS_TEXTUREMODES_DOT_RFLCT_SPEC_CONST */\n");
+            mstring_append_fmt(vars, "float dot%d = dot(pT%d.xyz, %s(it%d));\n",
+                i, i, dotmap_func, ps->input_tex[i]);
+            mstring_append_fmt(vars, "vec3 n_%d = vec3(dot%d, dot%d, dot%d);\n",
+                i, i-2, i-1, i);
+            mstring_append_fmt(vars, "vec3 rv_%d = 2*n_%d*dot(n_%d,eyeVec)/dot(n_%d,n_%d) - eyeVec;\n",
+                i, i, i, i, i);
+            apply_border_adjustment(ps, vars, i, "rv_%d");
+            mstring_append_fmt(vars, "vec4 t%d = texture(texSamp%d, rv_%d);\n",
+                i, i, i);
+            post_process_texture_samples(ps, vars, i);
             break;
         default:
             fprintf(stderr, "Unknown ps tex mode: 0x%x\n", ps->tex_modes[i]);
