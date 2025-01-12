@@ -252,6 +252,8 @@ static void update_shader_constant_locations(ShaderBinding *binding)
         uniform_index(&binding->fragment->uniforms, "alphaRef");
     binding->stipple_pattern_loc =
         uniform_index(&binding->fragment->uniforms, "stipplePattern");
+    binding->eye_vec_loc =
+        uniform_index(&binding->fragment->uniforms, "eyeVec");
     binding->fog_color_loc =
         uniform_index(&binding->fragment->uniforms, "fogColor");
     for (int i = 1; i < NV2A_MAX_TEXTURES; i++) {
@@ -498,6 +500,16 @@ static void shader_update_constants(PGRAPHState *pg, ShaderBinding *binding,
         }
         uniform1uiv(&binding->fragment->uniforms, binding->stipple_pattern_loc,
                     32, pat);
+    }
+
+    if (binding->eye_vec_loc != -1) {
+        uint32_t v[3] = {
+            pgraph_reg_r(pg, NV_PGRAPH_EYEVEC0),
+            pgraph_reg_r(pg, NV_PGRAPH_EYEVEC1),
+            pgraph_reg_r(pg, NV_PGRAPH_EYEVEC2)
+        };
+        uniform1fv(&binding->fragment->uniforms, binding->eye_vec_loc, 3,
+                   (float *)v);
     }
 
     /* For each texture stage */
