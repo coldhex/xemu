@@ -166,6 +166,7 @@ typedef struct ShaderBinding {
     int psh_constant_loc[9][2];
     int alpha_ref_loc;
     int stipple_pattern_loc;
+    int eye_vec_loc;
 
     int bump_mat_loc[NV2A_MAX_TEXTURES];
     int bump_scale_loc[NV2A_MAX_TEXTURES];
