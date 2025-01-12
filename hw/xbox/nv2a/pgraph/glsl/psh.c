@@ -614,6 +614,14 @@ static const char *get_sampler_type(enum PS_TEXTUREMODES mode, const PshState *s
         }
         return dim == 2 ? sampler2D : sampler3D;
 
+    case PS_TEXTUREMODES_BRDF:
+        assert(dim == 3);
+        if (state->shadow_map[i]) {
+            fprintf(stderr, "Shadow map support not implemented for mode %d\n", mode);
+            assert(!"Shadow map support not implemented for this mode");
+        }
+        return sampler3D;
+
     case PS_TEXTUREMODES_CUBEMAP:
     case PS_TEXTUREMODES_DOT_RFLCT_DIFF:
     case PS_TEXTUREMODES_DOT_RFLCT_SPEC:
@@ -1164,10 +1172,14 @@ static MString* psh_convert(struct PixelShader *ps)
             break;
         case PS_TEXTUREMODES_BRDF:
             assert(i >= 2);
-            mstring_append_fmt(vars, "vec4 t%d = vec4(0.0); /* PS_TEXTUREMODES_BRDF */\n",
-                               i);
-            set_stage_result_from_rgba(ps, vars, i);
-            NV2A_UNIMPLEMENTED("PS_TEXTUREMODES_BRDF");
+            mstring_append(vars, "/* PS_TEXTUREMODES_BRDF */\n");
+            mstring_append_fmt(vars, "vec2 brdf%d_e = dotmap_hilo_1(it%d).xy;\n", i, i - 2);
+            mstring_append_fmt(vars, "vec2 brdf%d_l = dotmap_hilo_1(it%d).xy;\n", i, i - 1);
+            mstring_append_fmt(vars, "vec3 brdf%d = vec3(brdf%d_e.x, brdf%d_l.x, brdf%d_l.y - brdf%d_e.y);\n",
+                i, i, i, i, i);
+            mstring_append_fmt(vars, "vec4 t%d = texture(texSamp%d, texScale%d * brdf%d);\n",
+                i, i, i, i);
+            post_process_texture_samples(ps, vars, i);
             break;
         case PS_TEXTUREMODES_DOT_ST:
             assert(i >= 2);
