@@ -724,7 +724,7 @@ static void shader_update_constants(PGRAPHState *pg, ShaderBinding *binding,
     if (binding->stipple_pattern_loc != -1) {
         uint32_t pat[32];
         for (i = 0; i < 32; i++) {
-            pat[i] = be32_to_cpu(pgraph_reg_r(pg,
+            pat[31 - i] = be32_to_cpu(pgraph_reg_r(pg,
                                      NV_PGRAPH_STIPPLE_PATTERN_0 + i * 4));
         }
         glUniform1uiv(binding->stipple_pattern_loc, 32, pat);
@@ -933,12 +933,8 @@ static void shader_update_constants(PGRAPHState *pg, ShaderBinding *binding,
         pgraph_apply_scaling_factor(pg, &x_min, &y_min);
         pgraph_apply_scaling_factor(pg, &x_max, &y_max);
 
-        /* Translate for the GL viewport origin */
-        int y_min_xlat = MAX((int)max_gl_height - (int)y_max, 0);
-        int y_max_xlat = MIN((int)max_gl_height - (int)y_min, max_gl_height);
-
         glUniform4i(r->shader_binding->clip_region_loc[i],
-                    x_min, y_min_xlat, x_max, y_max_xlat);
+                    x_min, y_min, x_max, y_max);
     }
 
     if (binding->material_alpha_loc != -1) {

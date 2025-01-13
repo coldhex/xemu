@@ -434,10 +434,6 @@ GLSL_DEFINE(materialEmissionColor, GLSL_LTCTXA(NV_IGRAPH_XF_LTCTXA_CM_COL) ".xyz
     "  oPos.xy *= oPos.w;\n"
     );
 
-    if (!state->vulkan) {
-        mstring_append(body, "  oPos.y = -oPos.y;\n");
-    }
-
     /* FIXME: Testing */
     if (state->point_params_enable) {
         mstring_append_fmt(
