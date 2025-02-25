@@ -745,8 +745,10 @@ static MString* psh_convert(struct PixelShader *ps)
 
     mstring_append_fmt(preflight, "%sfloat alphaRef;\n"
                                   "%svec4  fogColor;\n"
-                                  "%sivec4 clipRegion[8];\n",
-                                  u, u, u);
+                                  "%sivec4 clipRegion[8];\n"
+                                  "%svec4  clipRange;\n"
+                                  "%sfloat depthOffset;\n",
+                                  u, u, u, u, u);
     for (int i = 0; i < 4; i++) {
         mstring_append_fmt(preflight, "%smat2  bumpMat%d;\n"
                                       "%sfloat bumpScale%d;\n"
@@ -859,6 +861,20 @@ static MString* psh_convert(struct PixelShader *ps)
         mstring_append(clip, "if (!clipContained) {\n"
                              "  discard;\n"
                              "}\n");
+    }
+
+    /* Depth clipping */
+    if (ps->state.depth_clipping) {
+        if (ps->state.z_perspective) {
+            mstring_append(clip, "float zvalue = 1.0/vtx_inv_w + depthOffset;\n"
+                                 "if (zvalue < clipRange.z || clipRange.w < zvalue) {\n"
+                                 "  discard;\n"
+                                 "}\n");
+        } else {
+            mstring_append(clip, "if (gl_FragCoord.z*clipRange.y < clipRange.z || clipRange.w < gl_FragCoord.z*clipRange.y) {\n"
+                                 "  discard;\n"
+                                 "}\n");
+        }
     }
 
     /* calculate perspective-correct inputs */
@@ -1204,6 +1220,15 @@ static MString* psh_convert(struct PixelShader *ps)
                 mstring_append(vars, "r0.a = 1.0;\n");
             }
         }
+    }
+
+    if (ps->state.z_perspective) {
+        if (!ps->state.depth_clipping) {
+            mstring_append(ps->code, "float zvalue = 1.0/vtx_inv_w + depthOffset;\n");
+        }
+        mstring_append(ps->code, "gl_FragDepth = clamp(zvalue, clipRange.z, clipRange.w)/clipRange.y;\n");
+    } else if (!ps->state.depth_clipping) {
+        mstring_append(ps->code, "gl_FragDepth = clamp(gl_FragCoord.z, clipRange.z/clipRange.y, clipRange.w/clipRange.y);\n");
     }
 
     MString *final = mstring_new();

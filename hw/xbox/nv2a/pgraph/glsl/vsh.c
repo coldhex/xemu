@@ -142,7 +142,7 @@ MString *pgraph_gen_vsh_glsl(const ShaderState *state, bool prefix_outputs)
     } else if (state->vertex_program) {
         pgraph_gen_vsh_prog_glsl(VSH_VERSION_XVS,
                                  (uint32_t *)state->program_data,
-                                 state->program_length, state->z_perspective,
+                                 state->program_length,
                                  state->vulkan, header, body);
     } else {
         assert(false);
@@ -246,8 +246,6 @@ MString *pgraph_gen_vsh_glsl(const ShaderState *state, bool prefix_outputs)
                       "  vtxT3 = oT3 * vtx_inv_w;\n"
                       "  gl_Position = oPos;\n"
                       "  gl_PointSize = oPts.x;\n"
-                      // "  gl_ClipDistance[0] = oPos.z - oPos.w*clipRange.z;\n" // Near
-                      // "  gl_ClipDistance[1] = oPos.w*clipRange.w - oPos.z;\n" // Far
                       "\n"
                       "}\n",
                        shade_model_mult,

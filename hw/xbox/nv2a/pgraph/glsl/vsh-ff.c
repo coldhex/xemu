@@ -447,11 +447,8 @@ GLSL_DEFINE(materialEmissionColor, GLSL_LTCTXA(NV_IGRAPH_XF_LTCTXA_CM_COL) ".xyz
     }
 
     mstring_append(body,
-                   "  if (oPos.w == 0.0 || isinf(oPos.w)) {\n"
-                   "    vtx_inv_w = 1.0;\n"
-                   "  } else {\n"
-                   "    vtx_inv_w = 1.0 / oPos.w;\n"
-                   "  }\n"
+                   "  oPos.w = (2.0f * step(0.0f, oPos.w) - 1.0f) * clamp(abs(oPos.w), 5.421011e-20, 1.8446744e19);\n"
+                   "  vtx_inv_w = 1.0 / oPos.w;\n"
                    "  vtx_inv_w_flat = vtx_inv_w;\n");
 }
 

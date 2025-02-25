@@ -735,13 +735,8 @@ static const char* vsh_header =
     "#define RCC(dest, mask, src) dest.mask = _RCC(_in(src).x).mask\n"
     "vec4 _RCC(float src)\n"
     "{\n"
-    "  float t = 1.0 / src;\n"
-    "  if (t > 0.0) {\n"
-    "    t = clamp(t, 5.42101e-020, 1.884467e+019);\n"
-    "  } else {\n"
-    "    t = clamp(t, -1.884467e+019, -5.42101e-020);\n"
-    "  }\n"
-    "  return vec4(t);\n"
+    "  src = (2.0f * step(0.0f, src) - 1.0f) * clamp(abs(src), 5.421011e-20, 1.8446744e19);\n"
+    "  return vec4(1.0 / src);\n"
     "}\n"
     "\n"
     "#define RSQ(dest, mask, src) dest.mask = _RSQ(_in(src).x).mask\n"
@@ -797,7 +792,6 @@ static const char* vsh_header =
 void pgraph_gen_vsh_prog_glsl(uint16_t version,
                    const uint32_t *tokens,
                    unsigned int length,
-                   bool z_perspective,
                    bool vulkan,
                    MString *header, MString *body)
 {
@@ -830,11 +824,8 @@ void pgraph_gen_vsh_prog_glsl(uint16_t version,
      * interpolation manually. OpenGL can't, since we give it a W of 1 to work
      * around the perspective divide */
     mstring_append(body,
-        "  if (oPos.w == 0.0 || isinf(oPos.w)) {\n"
-        "    vtx_inv_w = 1.0;\n"
-        "  } else {\n"
-        "    vtx_inv_w = 1.0 / oPos.w;\n"
-        "  }\n"
+        "  oPos.w = (2.0f * step(0.0f, oPos.w) - 1.0f) * clamp(abs(oPos.w), 5.421011e-20, 1.8446744e19);\n"
+        "  vtx_inv_w = 1.0 / oPos.w;\n"
         "  vtx_inv_w_flat = vtx_inv_w;\n"
     );
 
@@ -848,28 +839,15 @@ void pgraph_gen_vsh_prog_glsl(uint16_t version,
 
     if (vulkan) {
         mstring_append(body,
-                       "  oPos.y = 2.0 * oPos.y / surfaceSize.y - 1.0;\n");
+                       "  oPos.y = 2.0 * oPos.y / surfaceSize.y - 1.0;\n"
+                       "  oPos.z = oPos.z / clipRange.y;\n");
     } else {
         mstring_append(body, "  oPos.y = -2.0 * (oPos.y - surfaceSize.y * 0.5) "
-                             "/ surfaceSize.y;\n");
-    }
-
-    if (z_perspective) {
-        mstring_append(body, "  oPos.z = oPos.w;\n");
+                             "/ surfaceSize.y;\n"
+                             "  oPos.z = oPos.z / clipRange.y * 2.0 - 1.0;\n");
     }
 
     mstring_append(body,
-        "  if (clipRange.y != clipRange.x) {\n");
-    if (vulkan) {
-        mstring_append(body, "      oPos.z /= clipRange.y;\n");
-    } else {
-        mstring_append(body,
-                       "    oPos.z = (oPos.z - clipRange.x)/(0.5*(clipRange.y "
-                       "- clipRange.x)) - 1;\n");
-    }
-    mstring_append(body,
-        "  }\n"
-
         /* Correct for the perspective divide */
         "  if (oPos.w < 0.0) {\n"
             /* undo the perspective divide in the case where the point would be
@@ -881,5 +859,4 @@ void pgraph_gen_vsh_prog_glsl(uint16_t version,
         "    oPos.w = 1.0;\n"
         "  }\n"
     );
-
 }
