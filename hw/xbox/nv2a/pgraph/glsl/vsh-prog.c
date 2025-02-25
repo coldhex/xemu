@@ -826,7 +826,6 @@ void pgraph_gen_vsh_prog_glsl(uint16_t version,
     mstring_append(body,
         "  oPos.w = (2.0f * step(0.0f, oPos.w) - 1.0f) * clamp(abs(oPos.w), 5.421011e-20, 1.8446744e19);\n"
         "  vtx_inv_w = 1.0 / oPos.w;\n"
-        "  vtx_inv_w_flat = vtx_inv_w;\n"
     );
 
     mstring_append(body,
@@ -852,6 +851,7 @@ void pgraph_gen_vsh_prog_glsl(uint16_t version,
         "  if (oPos.w < 0.0) {\n"
             /* undo the perspective divide in the case where the point would be
              * clipped so opengl can clip it correctly */
+        "    oPos.w = -1.0;\n"
         "    oPos.xyz *= oPos.w;\n"
         "  } else {\n"
             /* we don't want the OpenGL perspective divide to happen, but we

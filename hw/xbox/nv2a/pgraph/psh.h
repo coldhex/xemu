@@ -87,6 +87,7 @@ typedef struct PshState {
     bool smooth_shading;
     bool depth_clipping;
     bool z_perspective;
+    bool custom_tri_interpolation;
 } PshState;
 
 #endif

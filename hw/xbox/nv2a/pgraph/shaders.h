@@ -100,6 +100,7 @@ typedef struct ShaderState {
     float point_params[8];
 
     bool smooth_shading;
+    bool custom_tri_interpolation;
 } ShaderState;
 
 typedef struct PGRAPHState PGRAPHState;

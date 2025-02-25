@@ -24,6 +24,8 @@
 #include "pgraph.h"
 #include "shaders.h"
 
+//#define CUSTOM_TRI_INTERPOLATION
+
 ShaderState pgraph_get_shader_state(PGRAPHState *pg)
 {
     bool vertex_program = GET_MASK(pgraph_reg_r(pg, NV_PGRAPH_CSV0_D),
@@ -121,6 +123,12 @@ ShaderState pgraph_get_shader_state(PGRAPHState *pg)
     state.psh.depth_clipping = GET_MASK(pgraph_reg_r(pg, NV_PGRAPH_ZCOMPRESSOCCLUDE),
                                         NV_PGRAPH_ZCOMPRESSOCCLUDE_ZCLAMP_EN) ==
                                NV_PGRAPH_ZCOMPRESSOCCLUDE_ZCLAMP_EN_CULL;
+
+#ifdef CUSTOM_TRI_INTERPOLATION
+    state.custom_tri_interpolation = (state.primitive_mode >= PRIM_TYPE_TRIANGLES &&
+                                      state.polygon_front_mode == POLY_MODE_FILL);
+    state.psh.custom_tri_interpolation = state.custom_tri_interpolation;
+#endif
 
     state.program_length = 0;
 

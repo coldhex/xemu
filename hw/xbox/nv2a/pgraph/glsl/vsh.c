@@ -75,12 +75,12 @@ MString *pgraph_gen_vsh_glsl(const ShaderState *state, bool prefix_outputs)
         "}\n");
 
     pgraph_get_glsl_vtx_header(header, state->vulkan, state->smooth_shading,
-                             false, prefix_outputs, false);
+                               false, prefix_outputs, false,
+                               state->custom_tri_interpolation);
 
     if (prefix_outputs) {
         mstring_append(header,
                        "#define vtx_inv_w v_vtx_inv_w\n"
-                       "#define vtx_inv_w_flat v_vtx_inv_w_flat\n"
                        "#define vtxD0 v_vtxD0\n"
                        "#define vtxD1 v_vtxD1\n"
                        "#define vtxB0 v_vtxB0\n"
@@ -233,12 +233,12 @@ MString *pgraph_gen_vsh_glsl(const ShaderState *state, bool prefix_outputs)
     }
 
     /* Set outputs */
-    const char *shade_model_mult = state->smooth_shading ? "vtx_inv_w" : "vtx_inv_w_flat";
+    const char *shade_model_mult = state->smooth_shading ? " * vtx_inv_w" : "";
     mstring_append_fmt(body, "\n"
-                      "  vtxD0 = clamp(oD0, 0.0, 1.0) * %s;\n"
-                      "  vtxD1 = clamp(oD1, 0.0, 1.0) * %s;\n"
-                      "  vtxB0 = clamp(oB0, 0.0, 1.0) * %s;\n"
-                      "  vtxB1 = clamp(oB1, 0.0, 1.0) * %s;\n"
+                      "  vtxD0 = clamp(oD0, 0.0, 1.0)%s;\n"
+                      "  vtxD1 = clamp(oD1, 0.0, 1.0)%s;\n"
+                      "  vtxB0 = clamp(oB0, 0.0, 1.0)%s;\n"
+                      "  vtxB1 = clamp(oB1, 0.0, 1.0)%s;\n"
                       "  vtxFog = oFog.x * vtx_inv_w;\n"
                       "  vtxT0 = oT0 * vtx_inv_w;\n"
                       "  vtxT1 = oT1 * vtx_inv_w;\n"

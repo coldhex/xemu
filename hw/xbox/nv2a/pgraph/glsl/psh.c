@@ -39,6 +39,8 @@
 #include "hw/xbox/nv2a/pgraph/psh.h"
 #include "psh.h"
 
+//#define BARYCENTRIC_COORDS
+
 /*
  * This implements translation of register combiners into glsl
  * fragment shaders, but all terminology is in terms of Xbox DirectX
@@ -732,7 +734,8 @@ static MString* psh_convert(struct PixelShader *ps)
 
     MString *preflight = mstring_new();
     pgraph_get_glsl_vtx_header(preflight, ps->state.vulkan,
-                             ps->state.smooth_shading, true, false, false);
+                               ps->state.smooth_shading, true, false, false,
+                               ps->state.custom_tri_interpolation);
 
     if (ps->state.vulkan) {
         mstring_append_fmt(preflight,
@@ -747,8 +750,9 @@ static MString* psh_convert(struct PixelShader *ps)
                                   "%svec4  fogColor;\n"
                                   "%sivec4 clipRegion[8];\n"
                                   "%svec4  clipRange;\n"
-                                  "%sfloat depthOffset;\n",
-                                  u, u, u, u, u);
+                                  "%sfloat depthOffset;\n"
+                                  "%svec2 surfaceDim;\n",
+                                  u, u, u, u, u, u);
     for (int i = 0; i < 4; i++) {
         mstring_append_fmt(preflight, "%smat2  bumpMat%d;\n"
                                       "%sfloat bumpScale%d;\n"
@@ -863,10 +867,26 @@ static MString* psh_convert(struct PixelShader *ps)
                              "}\n");
     }
 
+    if (ps->state.custom_tri_interpolation) {
+#ifdef BARYCENTRIC_COORDS
+        mstring_append(clip,
+                       "vec3 scrc = vec3((gl_FragCoord.xy - 0.5*surfaceDim)/(0.5*surfaceDim), 1.0);\n"
+                       "vec3 baryc = vec3(coordinv*scrc);\n"
+                       "baryc /= baryc.x + baryc.y + baryc.z;\n"
+                       "float inv_w = dot(tri_inv_w, baryc);\n");
+#else
+        mstring_append(clip,
+                       "vec3 scrc = vec3((gl_FragCoord.xy - 0.5*surfaceDim)/(0.5*surfaceDim), 1.0);\n"
+                       "float inv_w = dot(tri_inv_w*coordinv, scrc);\n");
+#endif
+    } else {
+        mstring_append(clip, "float inv_w = vtx_inv_w;\n");
+    }
+
     /* Depth clipping */
     if (ps->state.depth_clipping) {
         if (ps->state.z_perspective) {
-            mstring_append(clip, "float zvalue = 1.0/vtx_inv_w + depthOffset;\n"
+            mstring_append(clip, "float zvalue = 1.0/inv_w + depthOffset;\n"
                                  "if (zvalue < clipRange.z || clipRange.w < zvalue) {\n"
                                  "  discard;\n"
                                  "}\n");
@@ -879,26 +899,69 @@ static MString* psh_convert(struct PixelShader *ps)
 
     /* calculate perspective-correct inputs */
     MString *vars = mstring_new();
-    if (ps->state.smooth_shading) {
-        mstring_append(vars, "vec4 pD0 = vtxD0 / vtx_inv_w;\n");
-        mstring_append(vars, "vec4 pD1 = vtxD1 / vtx_inv_w;\n");
-        mstring_append(vars, "vec4 pB0 = vtxB0 / vtx_inv_w;\n");
-        mstring_append(vars, "vec4 pB1 = vtxB1 / vtx_inv_w;\n");
+    if (ps->state.custom_tri_interpolation) {
+#ifdef BARYCENTRIC_COORDS
+        mstring_append(vars,
+                       "vec4 pFog = vec4(fogColor.rgb, clamp(triFog*baryc / inv_w, 0.0, 1.0));\n"
+                       "vec4 pT0 = triT0*baryc / inv_w;\n"
+                       "vec4 pT1 = triT1*baryc / inv_w;\n"
+                       "vec4 pT2 = triT2*baryc / inv_w;\n");
+#else
+        mstring_append(vars,
+                       "vec4 pFog = vec4(fogColor.rgb, clamp(dot(triFog*coordinv, scrc) / inv_w, 0.0, 1.0));\n"
+                       "vec4 pT0 = (triT0*coordinv)*scrc / inv_w;\n"
+                       "vec4 pT1 = (triT1*coordinv)*scrc / inv_w;\n"
+                       "vec4 pT2 = (triT2*coordinv)*scrc / inv_w;\n");
+#endif
     } else {
-        mstring_append(vars, "vec4 pD0 = vtxD0 / vtx_inv_w_flat;\n");
-        mstring_append(vars, "vec4 pD1 = vtxD1 / vtx_inv_w_flat;\n");
-        mstring_append(vars, "vec4 pB0 = vtxB0 / vtx_inv_w_flat;\n");
-        mstring_append(vars, "vec4 pB1 = vtxB1 / vtx_inv_w_flat;\n");
+        mstring_append(vars,
+                       "vec4 pFog = vec4(fogColor.rgb, clamp(vtxFog / vtx_inv_w, 0.0, 1.0));\n"
+                       "vec4 pT0 = vtxT0 / vtx_inv_w;\n"
+                       "vec4 pT1 = vtxT1 / vtx_inv_w;\n"
+                       "vec4 pT2 = vtxT2 / vtx_inv_w;\n");
     }
-    mstring_append(vars, "vec4 pFog = vec4(fogColor.rgb, clamp(vtxFog / vtx_inv_w, 0.0, 1.0));\n");
-    mstring_append(vars, "vec4 pT0 = vtxT0 / vtx_inv_w;\n");
-    mstring_append(vars, "vec4 pT1 = vtxT1 / vtx_inv_w;\n");
-    mstring_append(vars, "vec4 pT2 = vtxT2 / vtx_inv_w;\n");
+
+    if (ps->state.smooth_shading) {
+        if (ps->state.custom_tri_interpolation) {
+#ifdef BARYCENTRIC_COORDS
+            mstring_append(vars,
+                           "vec4 pD0 = triD0*baryc / inv_w;\n"
+                           "vec4 pD1 = triD1*baryc / inv_w;\n"
+                           "vec4 pB0 = triB0*baryc / inv_w;\n"
+                           "vec4 pB1 = triB1*baryc / inv_w;\n");
+#else
+            mstring_append(vars,
+                           "vec4 pD0 = (triD0*coordinv)*scrc / inv_w;\n"
+                           "vec4 pD1 = (triD1*coordinv)*scrc / inv_w;\n"
+                           "vec4 pB0 = (triB0*coordinv)*scrc / inv_w;\n"
+                           "vec4 pB1 = (triB1*coordinv)*scrc / inv_w;\n");
+#endif
+        } else {
+            mstring_append(vars,
+                           "vec4 pD0 = vtxD0 / vtx_inv_w;\n"
+                           "vec4 pD1 = vtxD1 / vtx_inv_w;\n"
+                           "vec4 pB0 = vtxB0 / vtx_inv_w;\n"
+                           "vec4 pB1 = vtxB1 / vtx_inv_w;\n");
+        }
+    } else {
+        mstring_append(vars, "vec4 pD0 = vtxD0;\n");
+        mstring_append(vars, "vec4 pD1 = vtxD1;\n");
+        mstring_append(vars, "vec4 pB0 = vtxB0;\n");
+        mstring_append(vars, "vec4 pB1 = vtxB1;\n");
+    }
     if (ps->state.point_sprite) {
         assert(!ps->state.rect_tex[3]);
         mstring_append(vars, "vec4 pT3 = vec4(gl_PointCoord, 1.0, 1.0);\n");
     } else {
-        mstring_append(vars, "vec4 pT3 = vtxT3 / vtx_inv_w;\n");
+        if (ps->state.custom_tri_interpolation) {
+#ifdef BARYCENTRIC_COORDS
+            mstring_append(vars, "vec4 pT3 = triT3*baryc / inv_w;\n");
+#else
+            mstring_append(vars, "vec4 pT3 = (triT3*coordinv)*scrc / inv_w;\n");
+#endif
+        } else {
+            mstring_append(vars, "vec4 pT3 = vtxT3 / vtx_inv_w;\n");
+        }
     }
     mstring_append(vars, "\n");
     mstring_append(vars, "vec4 v0 = pD0;\n");
@@ -1224,7 +1287,7 @@ static MString* psh_convert(struct PixelShader *ps)
 
     if (ps->state.z_perspective) {
         if (!ps->state.depth_clipping) {
-            mstring_append(ps->code, "float zvalue = 1.0/vtx_inv_w + depthOffset;\n");
+            mstring_append(ps->code, "float zvalue = 1.0/inv_w + depthOffset;\n");
         }
         mstring_append(ps->code, "gl_FragDepth = clamp(zvalue, clipRange.z, clipRange.w)/clipRange.y;\n");
     } else if (!ps->state.depth_clipping) {

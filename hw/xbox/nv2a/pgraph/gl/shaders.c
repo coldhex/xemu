@@ -153,6 +153,7 @@ static void update_shader_constant_locations(ShaderBinding *binding)
         binding->vsh_constant_loc[i] = glGetUniformLocation(binding->gl_program, tmp);
     }
     binding->surface_size_loc = glGetUniformLocation(binding->gl_program, "surfaceSize");
+    binding->surface_dim_loc = glGetUniformLocation(binding->gl_program, "surfaceDim");
     binding->clip_range_loc = glGetUniformLocation(binding->gl_program, "clipRange");
     binding->depth_offset_loc = glGetUniformLocation(binding->gl_program, "depthOffset");
     binding->fog_color_loc = glGetUniformLocation(binding->gl_program, "fogColor");
@@ -219,6 +220,7 @@ static void generate_shaders(ShaderBinding *binding)
                                  state->polygon_back_mode,
                                  state->primitive_mode,
                                  state->smooth_shading,
+                                 state->custom_tri_interpolation,
                                  false);
     if (geometry_shader_code) {
         const char* geometry_shader_code_str =
@@ -881,6 +883,11 @@ static void shader_update_constants(PGRAPHState *pg, ShaderBinding *binding,
         glUniform2f(binding->surface_size_loc,
                     pg->surface_binding_dim.width / aa_width,
                     pg->surface_binding_dim.height / aa_height);
+    }
+
+    if (binding->surface_dim_loc != -1) {
+        glUniform2f(binding->surface_dim_loc, pg->surface_binding_dim.width,
+                    pg->surface_binding_dim.height);
     }
 
     if (binding->clip_range_loc != -1) {

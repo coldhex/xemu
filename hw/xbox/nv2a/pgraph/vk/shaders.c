@@ -274,6 +274,8 @@ static void update_shader_constant_locations(ShaderBinding *binding)
     binding->vsh_constant_loc = uniform_index(&binding->vertex->uniforms, "c");
     binding->surface_size_loc =
         uniform_index(&binding->vertex->uniforms, "surfaceSize");
+    binding->surface_dim_loc =
+        uniform_index(&binding->fragment->uniforms, "surfaceDim");
     binding->clip_range_loc =
         uniform_index(&binding->vertex->uniforms, "clipRange");
     binding->clip_range_floc =
@@ -396,7 +398,8 @@ static ShaderBinding *gen_shaders(PGRAPHState *pg, ShaderState *state)
 
         MString *geometry_shader_code = pgraph_gen_geom_glsl(
             state->polygon_front_mode, state->polygon_back_mode,
-            state->primitive_mode, state->smooth_shading, true);
+            state->primitive_mode, state->smooth_shading,
+            state->custom_tri_interpolation, true);
         if (geometry_shader_code) {
             NV2A_VK_DPRINTF("geometry shader: \n%s",
                             mstring_get_str(geometry_shader_code));
@@ -640,6 +643,12 @@ static void shader_update_constants(PGRAPHState *pg, ShaderBinding *binding,
         uniform2f(&binding->vertex->uniforms, binding->surface_size_loc,
                          pg->surface_binding_dim.width / aa_width,
                          pg->surface_binding_dim.height / aa_height);
+    }
+
+    if (binding->surface_dim_loc != -1) {
+        uniform2f(&binding->fragment->uniforms, binding->surface_dim_loc,
+                         pg->surface_binding_dim.width,
+                         pg->surface_binding_dim.height);
     }
 
     if (binding->clip_range_loc != -1 || binding->clip_range_floc != -1) {

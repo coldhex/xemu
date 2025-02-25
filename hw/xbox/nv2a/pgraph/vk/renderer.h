@@ -172,6 +172,7 @@ typedef struct ShaderBinding {
     int tex_scale_loc[NV2A_MAX_TEXTURES];
 
     int surface_size_loc;
+    int surface_dim_loc;
     int clip_range_loc;
     int clip_range_floc;
     int depth_offset_loc;
