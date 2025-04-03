@@ -257,6 +257,10 @@ void pgraph_gl_draw_begin(NV2AState *d)
     if (GET_MASK(pgraph_reg_r(pg, NV_PGRAPH_CONTROL_3),
                  NV_PGRAPH_CONTROL_3_SHADEMODE) ==
         NV_PGRAPH_CONTROL_3_SHADEMODE_FLAT) {
+        // FIXME: OpenGL and Vulkan only specify triangle vertex winding for
+        // geometry shader input triangles. For example, setting first vertex
+        // convention does not affect the order with Intel UHD 770 GPU, but
+        // does affect the order with AMD Radeon RX 6600.
         glProvokingVertex(GL_FIRST_VERTEX_CONVENTION);
     }
 

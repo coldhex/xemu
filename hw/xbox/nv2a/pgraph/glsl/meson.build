@@ -1,5 +1,6 @@
 specific_ss.add([files(
 	'common.c',
+	'dwfloat.c',
 	'geom.c',
 	'psh.c',
 	'vsh.c',

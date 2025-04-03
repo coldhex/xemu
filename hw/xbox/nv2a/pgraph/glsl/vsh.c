@@ -98,6 +98,9 @@ MString *pgraph_gen_vsh_glsl(const ShaderState *state, bool prefix_outputs)
                        "#define vtxT1 v_vtxT1\n"
                        "#define vtxT2 v_vtxT2\n"
                        "#define vtxT3 v_vtxT3\n"
+                       "#define vtxPos v_vtxPos\n"
+                       "#define triDZ v_triDZ\n"
+                       "#define triMZ v_triMZ\n"
                        );
     }
     mstring_append(header, "\n");
@@ -249,6 +252,8 @@ MString *pgraph_gen_vsh_glsl(const ShaderState *state, bool prefix_outputs)
                    "  vtxT1 = oT1;\n"
                    "  vtxT2 = oT2;\n"
                    "  vtxT3 = oT3;\n"
+                   "  triDZ = vec4(0.0);\n"
+                   "  triMZ = 0.0;\n"
                    "  gl_PointSize = oPts.x;\n"
     );
 

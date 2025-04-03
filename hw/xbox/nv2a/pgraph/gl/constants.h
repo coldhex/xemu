@@ -312,12 +312,8 @@ static const SurfaceFormatInfo kelvin_surface_color_format_gl_map[] = {
 
 static const SurfaceFormatInfo kelvin_surface_zeta_float_format_gl_map[] = {
     [NV097_SET_SURFACE_FORMAT_ZETA_Z16] =
-        {2, GL_DEPTH_COMPONENT32F, GL_DEPTH_COMPONENT, GL_HALF_FLOAT, GL_DEPTH_ATTACHMENT},
+        {2, GL_DEPTH_COMPONENT16, GL_DEPTH_COMPONENT, GL_UNSIGNED_SHORT, GL_DEPTH_ATTACHMENT},
     [NV097_SET_SURFACE_FORMAT_ZETA_Z24S8] =
-        /* FIXME: GL does not support packing floating-point Z24S8 OOTB, so for
-         *        now just emulate this with fixed-point Z24S8. Possible compat
-         *        improvement with custom conversion.
-         */
         {4, GL_DEPTH24_STENCIL8, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8, GL_DEPTH_STENCIL_ATTACHMENT},
 };
 

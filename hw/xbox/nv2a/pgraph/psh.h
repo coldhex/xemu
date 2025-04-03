@@ -51,6 +51,13 @@ enum ConvolutionFilter {
     CONVOLUTION_FILTER_GAUSSIAN,
 };
 
+enum PshDepthFormat {
+    DEPTH_FORMAT_D24,
+    DEPTH_FORMAT_D16,
+    DEPTH_FORMAT_F24,
+    DEPTH_FORMAT_F16,
+};
+
 /* These are the most significant nibble of NV097_SET_TEXTURE_FILTER
  * i.e. NV097_SET_TEXTURE_FILTER_ASIGNED, NV097_SET_TEXTURE_FILTER_RSIGNED,
  * NV097_SET_TEXTURE_FILTER_GSIGNED and NV097_SET_TEXTURE_FILTER_BSIGNED.
@@ -99,6 +106,8 @@ typedef struct PshState {
     bool smooth_shading;
     bool depth_clipping;
     bool z_perspective;
+
+    enum PshDepthFormat depth_format;
 } PshState;
 
 #endif
