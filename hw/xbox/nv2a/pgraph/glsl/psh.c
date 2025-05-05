@@ -1608,8 +1608,8 @@ static MString* psh_convert(struct PixelShader *ps)
     mstring_append_fmt(final, "#version %d\n\n", ps->opts.vulkan ? 450 : 400);
     mstring_append(final, mstring_get_str(preflight));
     mstring_append(final, "void main() {\n");
-    mstring_append(final, mstring_get_str(clip));
     mstring_append(final, mstring_get_str(vars));
+    mstring_append(final, mstring_get_str(clip));
     mstring_append(final, mstring_get_str(ps->code));
     mstring_append(final, "}\n");
 
