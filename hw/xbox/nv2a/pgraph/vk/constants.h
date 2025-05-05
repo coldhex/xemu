@@ -404,8 +404,6 @@ static const BasicSurfaceFormatInfo kelvin_surface_zeta_format_map[] = {
     [NV097_SET_SURFACE_FORMAT_ZETA_Z24S8] = { 4 },
 };
 
-// FIXME: Actually support stored float format
-
 static const SurfaceFormatInfo zeta_d16 = {
     2,
     VK_FORMAT_D16_UNORM,
