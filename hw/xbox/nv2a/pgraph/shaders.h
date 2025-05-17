@@ -109,6 +109,7 @@ typedef struct ShaderState {
 
     bool texture_perspective;
     bool smooth_shading;
+    bool first_vertex_is_provoking;
 } ShaderState;
 
 typedef struct PGRAPHState PGRAPHState;
