@@ -239,6 +239,7 @@ static const ColorFormatInfo kelvin_color_format_gl_map[66] = {
      * RED: The depth value.
      * GREEN: 0 for 16-bit, 1 for 24 bit
      * BLUE: 0 for fixed, 1 for float
+     * TODO: remove this comment? Swizzle data is not used anymore.
      */
     [NV097_SET_TEXTURE_FORMAT_COLOR_SZ_DEPTH_Y16_FIXED] =
         {2, false, GL_DEPTH_COMPONENT16, GL_DEPTH_COMPONENT, GL_UNSIGNED_SHORT,
@@ -247,14 +248,13 @@ static const ColorFormatInfo kelvin_color_format_gl_map[66] = {
         {4, true, GL_DEPTH_COMPONENT, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8,
          {GL_RED, GL_ONE, GL_ZERO, GL_ZERO}, true},
     [NV097_SET_TEXTURE_FORMAT_COLOR_LU_IMAGE_DEPTH_X8_Y24_FLOAT] =
-        /* FIXME: Uses fixed-point format to match surface format hack below. */
         {4, true, GL_DEPTH_COMPONENT, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8,
-         {GL_RED, GL_ONE, GL_ZERO, GL_ZERO}, true},
+         {GL_RED, GL_ONE, GL_ONE, GL_ZERO}, true},
     [NV097_SET_TEXTURE_FORMAT_COLOR_LU_IMAGE_DEPTH_Y16_FIXED] =
         {2, true, GL_DEPTH_COMPONENT16, GL_DEPTH_COMPONENT, GL_UNSIGNED_SHORT,
          {GL_RED, GL_ZERO, GL_ZERO, GL_ZERO}, true},
     [NV097_SET_TEXTURE_FORMAT_COLOR_LU_IMAGE_DEPTH_Y16_FLOAT] =
-        {2, true, GL_DEPTH_COMPONENT16, GL_DEPTH_COMPONENT, GL_HALF_FLOAT,
+        {2, true, GL_DEPTH_COMPONENT16, GL_DEPTH_COMPONENT, GL_UNSIGNED_SHORT,
           {GL_RED, GL_ZERO, GL_ONE, GL_ZERO}, true},
 
     [NV097_SET_TEXTURE_FORMAT_COLOR_SZ_Y16] =
@@ -312,12 +312,8 @@ static const SurfaceFormatInfo kelvin_surface_color_format_gl_map[] = {
 
 static const SurfaceFormatInfo kelvin_surface_zeta_float_format_gl_map[] = {
     [NV097_SET_SURFACE_FORMAT_ZETA_Z16] =
-        {2, GL_DEPTH_COMPONENT32F, GL_DEPTH_COMPONENT, GL_HALF_FLOAT, GL_DEPTH_ATTACHMENT},
+        {2, GL_DEPTH_COMPONENT16, GL_DEPTH_COMPONENT, GL_UNSIGNED_SHORT, GL_DEPTH_ATTACHMENT},
     [NV097_SET_SURFACE_FORMAT_ZETA_Z24S8] =
-        /* FIXME: GL does not support packing floating-point Z24S8 OOTB, so for
-         *        now just emulate this with fixed-point Z24S8. Possible compat
-         *        improvement with custom conversion.
-         */
         {4, GL_DEPTH24_STENCIL8, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8, GL_DEPTH_STENCIL_ATTACHMENT},
 };
 

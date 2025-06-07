@@ -265,6 +265,7 @@ static const VkColorFormatInfo kelvin_color_format_vk_map[66] = {
      * RED: The depth value.
      * GREEN: 0 for 16-bit, 1 for 24 bit
      * BLUE: 0 for fixed, 1 for float
+     * TODO: remove this comment? Swizzle data is not used anymore.
      */
     [NV097_SET_TEXTURE_FORMAT_COLOR_SZ_DEPTH_Y16_FIXED] = {
         VK_FORMAT_R16_UNORM, // FIXME
@@ -278,9 +279,9 @@ static const VkColorFormatInfo kelvin_color_format_vk_map[66] = {
     },
     [NV097_SET_TEXTURE_FORMAT_COLOR_LU_IMAGE_DEPTH_X8_Y24_FLOAT] = {
         // FIXME
-        // {GL_DEPTH_COMPONENT, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8, {GL_RED, GL_ONE, GL_ZERO, GL_ZERO}},
+        // {GL_DEPTH_COMPONENT, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8, {GL_RED, GL_ONE, GL_ONE, GL_ZERO}},
         VK_FORMAT_R32_UINT,
-        { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_ONE, VK_COMPONENT_SWIZZLE_ZERO,  VK_COMPONENT_SWIZZLE_ZERO },
+        { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_ONE, VK_COMPONENT_SWIZZLE_ONE,  VK_COMPONENT_SWIZZLE_ZERO },
     },
     [NV097_SET_TEXTURE_FORMAT_COLOR_LU_IMAGE_DEPTH_Y16_FIXED] = {
         VK_FORMAT_R16_UNORM, // FIXME
@@ -403,8 +404,6 @@ static const BasicSurfaceFormatInfo kelvin_surface_zeta_format_map[] = {
     [NV097_SET_SURFACE_FORMAT_ZETA_Z16] = { 2 },
     [NV097_SET_SURFACE_FORMAT_ZETA_Z24S8] = { 4 },
 };
-
-// FIXME: Actually support stored float format
 
 static const SurfaceFormatInfo zeta_d16 = {
     2,
