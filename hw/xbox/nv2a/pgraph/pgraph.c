@@ -3132,21 +3132,13 @@ void pgraph_get_clear_depth_stencil_value(PGRAPHState *pg, float *depth,
     case NV097_SET_SURFACE_FORMAT_ZETA_Z16: {
         uint16_t z = clear_zstencil & 0xFFFF;
         /* FIXME: Remove bit for stencil clear? */
-        if (pg->surface_shape.z_format) {
-            *depth = convert_f16_to_float(z) / f16_max;
-        } else {
-            *depth = z / (float)0xFFFF;
-        }
+        *depth = z / (float)0xFFFF;
         break;
     }
     case NV097_SET_SURFACE_FORMAT_ZETA_Z24S8: {
         *stencil = clear_zstencil & 0xFF;
         uint32_t z = clear_zstencil >> 8;
-        if (pg->surface_shape.z_format) {
-            *depth = convert_f24_to_float(z) / f24_max;
-        } else {
-            *depth = z / (float)0xFFFFFF;
-        }
+        *depth = z / (float)0xFFFFFF;
         break;
     }
     default:

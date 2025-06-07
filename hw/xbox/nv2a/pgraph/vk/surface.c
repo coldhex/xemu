@@ -1317,7 +1317,6 @@ static void populate_surface_binding_target_sized(NV2AState *d, bool color,
                ARRAY_SIZE(r->kelvin_surface_zeta_vk_map));
         fmt = kelvin_surface_zeta_format_map[pg->surface_shape.zeta_format];
         host_fmt = r->kelvin_surface_zeta_vk_map[pg->surface_shape.zeta_format];
-        // FIXME: Support float 16,24b float format surface
     }
 
     DMAObject dma = nv_dma_load(d, dma_address);

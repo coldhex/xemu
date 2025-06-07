@@ -750,28 +750,27 @@ static void psh_append_shadowmap(const struct PixelShader *ps, int i, bool compa
         tex_remap, i);
 
     if (extract_msb_24b) {
+        // TODO: avoid unnecessary divide and multiply below by 0xFFFFFF when
+        // compare_z is true.
         mstring_append_fmt(vars,
                            "vec4 t%d_depth = vec4(float(t%d_depth_raw.x >> 8) "
                            "/ 0xFFFFFF, 1.0, 0.0, 0.0);\n",
                            i, i);
     }
 
-    // Depth.y != 0 indicates 24 bit; depth.z != 0 indicates float.
     if (compare_z) {
+        uint8_t tf = ps->state->tex_color_format[i];
+
         mstring_append_fmt(
             vars,
-            "float t%d_max_depth;\n"
-            "if (t%d_depth.y > 0) {\n"
-            "  t%d_max_depth = 0xFFFFFF;\n"
-            "} else {\n"
-            "  t%d_max_depth = t%d_depth.z > 0 ? 511.9375 : 0xFFFF;\n"
-            "}\n"
-            "t%d_depth.x *= t%d_max_depth;\n"
-            "pT%d.z = clamp(pT%d.z / pT%d.w, 0, t%d_max_depth);\n"
+            "t%d_depth.x = round(t%d_depth.x * %s);\n"
+            "pT%d.z = float(%s(pT%d.z / pT%d.w));\n"
             "vec4 t%d = vec4(t%d_depth.x %s pT%d.z ? 1.0 : 0.0);\n",
-            i, i, i, i, i,
-            i, i, i, i, i, i,
-            i, i, comparison, i);
+            i, i, is_x8y24_format(tf) ? "16777215.0" : "65535.0", i,
+            tf == NV097_SET_TEXTURE_FORMAT_COLOR_LU_IMAGE_DEPTH_X8_Y24_FLOAT ? "depthToF24" :
+            tf == NV097_SET_TEXTURE_FORMAT_COLOR_LU_IMAGE_DEPTH_X8_Y24_FIXED ? "depthToD24" :
+            tf == NV097_SET_TEXTURE_FORMAT_COLOR_LU_IMAGE_DEPTH_Y16_FLOAT ? "depthToF16" : "depthToD16",
+            i, i, i, i, comparison, i);
     } else {
         mstring_append_fmt(
             vars,
@@ -1005,6 +1004,26 @@ static MString* psh_convert(struct PixelShader *ps)
         "}\n"
         "float area(vec2 a, vec2 b, vec2 c) {\n"
         "    return kahan_det(b - a, c - a);\n"
+        "}\n"
+        // Convert to floating point, no sign, 4-bit exponent, 12-bit mantissa
+        "float depthToF16(float z) {\n"
+        "    uint zi = floatBitsToUint(max(z, 0.0)) >> 11;\n"
+        "    zi = clamp(zi, 0x78000u, 0x87FFFu) - 0x78000u;\n"
+        "    return float(zi < 0x1000u ? 0u : zi);\n" // Flush subnormal numbers to zero
+        "}\n"
+        // Convert to floating point, no sign, 8-bit exponent, 16-bit mantissa.
+        // (Flushing subnormals to zero not needed explicitly since GPU did
+        // that to the input 32-bit float already.)
+        "float depthToF24(float z) {\n"
+        "    return float(floatBitsToUint(max(z, 0.0)) >> 7);\n"
+        "}\n"
+        // Convert to 16-bit unsigned int. NV2A floors depth value.
+        "float depthToD16(float z) {\n"
+        "    return clamp(floor(z), 0.0, 65535.0);\n"
+        "}\n"
+        // Convert to 24-bit unsigned int. NV2A floors depth value.
+        "float depthToD24(float z) {\n"
+        "    return clamp(floor(z), 0.0, 16777215.0);\n"
         "}\n"
         "const float[9] gaussian3x3 = float[9](\n"
         "    1.0/16.0, 2.0/16.0, 1.0/16.0,\n"
@@ -1558,32 +1577,30 @@ static MString* psh_convert(struct PixelShader *ps)
         }
     }
 
-    /* With integer depth buffers Xbox hardware floors values. For gl_FragDepth
-     * range [0,1] Radeon floors values to integer depth buffer, but Intel UHD
-     * 770 rounds to nearest. For 24-bit OpenGL/Vulkan integer depth buffer,
-     * we divide the desired depth integer value by 16777216.0, then add 1 in
-     * integer bit representation to get the same result as dividing the
-     * desired depth integer by 16777215.0 would give. (GPUs can't divide by
-     * 16777215.0, only multiply by 1.0/16777215.0 which gives different results
-     * due to rounding.)
-     */
-
     switch (ps->state->depth_format) {
     case DEPTH_FORMAT_D16:
-        // 16-bit unsigned int
-        mstring_append(
+    case DEPTH_FORMAT_F16:
+        mstring_append_fmt(
             ps->code,
-            "gl_FragDepth = floor(zvalue) / 65535.0;\n");
+            "gl_FragDepth = %s(zvalue) / 65535.0;\n",
+            ps->state->depth_format == DEPTH_FORMAT_F16 ? "depthToF16" :
+            "depthToD16");
         break;
     case DEPTH_FORMAT_D24:
-        // 24-bit unsigned int
-        mstring_append(
-            ps->code,
-            "gl_FragDepth = uintBitsToFloat(floatBitsToUint(floor(zvalue) / 16777216.0) + 1u);\n");
-        break;
+    case DEPTH_FORMAT_F24:
     default:
-        // TODO: handle floating-point depth buffers properly
-        mstring_append(ps->code, "gl_FragDepth = zvalue / clipRange.y;\n");
+        /* For 24-bit OpenGL/Vulkan integer depth buffer, we divide the desired
+         * depth integer value by 16777216.0, then add 1 in integer bit
+         * representation to get the same result as dividing the desired depth
+         * integer by 16777215.0 would give. (GPUs can't divide by 16777215.0,
+         * only multiply by 1.0/16777215.0 which gives different result due to
+         * rounding.)
+         */
+        mstring_append_fmt(
+            ps->code,
+            "gl_FragDepth = uintBitsToFloat(floatBitsToUint(%s(zvalue) / 16777216.0) + 1u);\n",
+            ps->state->depth_format == DEPTH_FORMAT_F24 ? "depthToF24" :
+            "depthToD24");
         break;
     }
 
