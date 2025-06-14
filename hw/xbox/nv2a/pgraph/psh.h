@@ -86,6 +86,7 @@ typedef struct PshState {
     bool rect_tex[4];
     bool compare_mode[4][4];
     bool alphakill[4];
+    bool biased_tex[4];
     uint8_t tex_color_format[4];
     uint8_t tex_channel_signs[4];
     enum ConvolutionFilter conv_tex[4];

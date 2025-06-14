@@ -20,6 +20,7 @@
  */
 
 #include "hw/xbox/nv2a/debug.h"
+#include "ui/xemu-settings.h"
 #include "texture.h"
 #include "pgraph.h"
 #include "shaders.h"
@@ -315,6 +316,15 @@ ShaderState pgraph_get_shader_state(PGRAPHState *pg)
         }
 
         state.psh.conv_tex[i] = kernel;
+
+        unsigned int mag_filter = GET_MASK(filter, NV_PGRAPH_TEXFILTER0_MAG);
+        state.psh.biased_tex[i] = g_config.tuning.tex_bias_ulps != 0 &&
+            (min_filter == NV_PGRAPH_TEXFILTER0_MIN_BOX_LOD0 ||
+             min_filter == NV_PGRAPH_TEXFILTER0_MIN_BOX_NEARESTLOD ||
+             min_filter == NV_PGRAPH_TEXFILTER0_MIN_BOX_TENT_LOD ||
+             mag_filter == NV_PGRAPH_TEXFILTER0_MIN_BOX_LOD0 ||
+             mag_filter == NV_PGRAPH_TEXFILTER0_MIN_BOX_NEARESTLOD ||
+             mag_filter == NV_PGRAPH_TEXFILTER0_MIN_BOX_TENT_LOD);
 
         state.psh.tex_color_format[i] = color_format;
         state.psh.tex_channel_signs[i] = GET_MASK(filter, NV_PGRAPH_TEXFILTER0_ASIGNED |
