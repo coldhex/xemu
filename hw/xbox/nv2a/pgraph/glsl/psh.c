@@ -29,6 +29,7 @@
 #include "qemu/osdep.h"
 #include "hw/xbox/nv2a/debug.h"
 #include "hw/xbox/nv2a/pgraph/pgraph.h"
+#include "ui/xemu-settings.h"
 #include "psh.h"
 
 DEF_UNIFORM_INFO_ARR(PshUniform, PSH_UNIFORM_DECL_X)
@@ -218,6 +219,16 @@ void pgraph_glsl_set_psh_state(PGRAPHState *pg, PshState *state)
         }
 
         state->conv_tex[i] = kernel;
+
+        unsigned int mag_filter = GET_MASK(filter, NV_PGRAPH_TEXFILTER0_MAG);
+        state->biased_tex[i] =
+            g_config.tuning.tex_bias_ulps != 0 &&
+            (min_filter == NV_PGRAPH_TEXFILTER0_MIN_BOX_LOD0 ||
+             min_filter == NV_PGRAPH_TEXFILTER0_MIN_BOX_NEARESTLOD ||
+             min_filter == NV_PGRAPH_TEXFILTER0_MIN_BOX_TENT_LOD ||
+             mag_filter == NV_PGRAPH_TEXFILTER0_MIN_BOX_LOD0 ||
+             mag_filter == NV_PGRAPH_TEXFILTER0_MIN_BOX_NEARESTLOD ||
+             mag_filter == NV_PGRAPH_TEXFILTER0_MIN_BOX_TENT_LOD);
 
         state->tex_color_format[i] = color_format;
         state->tex_channel_signs[i] = GET_MASK(filter, NV_PGRAPH_TEXFILTER0_ASIGNED |
@@ -1143,11 +1154,35 @@ static MString* psh_convert(struct PixelShader *ps)
     mstring_append(vars, "vec4 pT0 = vtxT0;\n");
     mstring_append(vars, "vec4 pT1 = vtxT1;\n");
     mstring_append(vars, "vec4 pT2 = vtxT2;\n");
+
+    if (ps->state->biased_tex[0] || ps->state->biased_tex[1] ||
+        ps->state->biased_tex[2] || ps->state->biased_tex[3]) {
+        mstring_append_fmt(
+            preflight,
+            "vec4 addTextureBias(vec4 v) {\n"
+            "  return vec4(v.xy + %d.0/8388608.0*abs(v.xy), v.zw);\n"
+            "}\n",
+            g_config.tuning.tex_bias_ulps);
+    }
+
+    if (ps->state->biased_tex[0]) {
+        mstring_append(vars, "pT0 = addTextureBias(pT0);\n");
+    }
+    if (ps->state->biased_tex[1]) {
+        mstring_append(vars, "pT1 = addTextureBias(pT1);\n");
+    }
+    if (ps->state->biased_tex[2]) {
+        mstring_append(vars, "pT2 = addTextureBias(pT2);\n");
+    }
+
     if (ps->state->point_sprite) {
         assert(!ps->state->rect_tex[3]);
         mstring_append(vars, "vec4 pT3 = vec4(gl_PointCoord, 1.0, 1.0);\n");
     } else {
         mstring_append(vars, "vec4 pT3 = vtxT3;\n");
+        if (ps->state->biased_tex[3]) {
+            mstring_append(vars, "pT3 = addTextureBias(pT3);\n");
+        }
     }
     mstring_append(vars, "\n");
     mstring_append(vars, "vec4 v0 = pD0;\n");

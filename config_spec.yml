@@ -279,3 +279,8 @@ perf:
   cache_shaders:
     type: bool
     default: true
+
+tuning:
+  tex_bias_ulps:
+    type: integer
+    default: 5
