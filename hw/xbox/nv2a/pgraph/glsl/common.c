@@ -25,43 +25,56 @@ const char *uniform_element_type_to_str[] = {
     UNIFORM_ELEMENT_TYPE_X(DECL_UNIFORM_ELEMENT_NAME)
 };
 
-MString *pgraph_glsl_get_vtx_header(MString *out, bool location, bool smooth,
-                                    bool perspective_correct, bool in,
+MString *pgraph_glsl_get_vtx_header(MString *out, bool location, bool in,
                                     bool prefix, bool array)
 {
-    const char *tex_qual_s = perspective_correct ? "" : "noperspective ";
-    const char *flat_s = "flat ";
-    const char *qualifier_s = smooth ? tex_qual_s : flat_s;
     const char *in_out_s = in ? "in" : "out";
     const char *float_s = "float";
     const char *vec4_s = "vec4";
     const char *prefix_s = prefix ? "v_" : "";
     const char *suffix_s = array ? "[]" : "";
     const struct {
-        const char *qualifier, *type, *name;
+        const char *type, *name;
     } attr[] = {
-        { qualifier_s, vec4_s,  "vtxD0"  },
-        { qualifier_s, vec4_s,  "vtxD1"  },
-        { qualifier_s, vec4_s,  "vtxB0"  },
-        { qualifier_s, vec4_s,  "vtxB1"  },
-        { tex_qual_s,  float_s, "vtxFog" },
-        { tex_qual_s,  vec4_s,  "vtxT0"  },
-        { tex_qual_s,  vec4_s,  "vtxT1"  },
-        { tex_qual_s,  vec4_s,  "vtxT2"  },
-        { tex_qual_s,  vec4_s,  "vtxT3"  },
-        { flat_s,      vec4_s,  "vtxPos0" },
-        { flat_s,      vec4_s,  "vtxPos1" },
-        { flat_s,      vec4_s,  "vtxPos2" },
-        { flat_s,      float_s, "triMZ"  },
+        { vec4_s,  "vtxPos0" },
+        { vec4_s,  "vtxPos1" },
+        { vec4_s,  "vtxPos2" },
+        { vec4_s,  "vtxD00" },
+        { vec4_s,  "vtxD01" },
+        { vec4_s,  "vtxD02" },
+        { vec4_s,  "vtxD10" },
+        { vec4_s,  "vtxD11" },
+        { vec4_s,  "vtxD12" },
+        { vec4_s,  "vtxB00" },
+        { vec4_s,  "vtxB01" },
+        { vec4_s,  "vtxB02" },
+        { vec4_s,  "vtxB10" },
+        { vec4_s,  "vtxB11" },
+        { vec4_s,  "vtxB12" },
+        { vec4_s,  "vtxT00" },
+        { vec4_s,  "vtxT01" },
+        { vec4_s,  "vtxT02" },
+        { vec4_s,  "vtxT10" },
+        { vec4_s,  "vtxT11" },
+        { vec4_s,  "vtxT12" },
+        { vec4_s,  "vtxT20" },
+        { vec4_s,  "vtxT21" },
+        { vec4_s,  "vtxT22" },
+        { vec4_s,  "vtxT30" },
+        { vec4_s,  "vtxT31" },
+        { vec4_s,  "vtxT32" },
+        { float_s, "vtxFog0" },
+        { float_s, "vtxFog1" },
+        { float_s, "vtxFog2" },
+        { float_s, "triMZ"  },
     };
 
     for (int i = 0; i < ARRAY_SIZE(attr); i++) {
         if (location) {
             mstring_append_fmt(out, "layout(location = %d) ", i);
         }
-        mstring_append_fmt(out, "%s%s %s %s%s%s;\n", attr[i].qualifier,
-                           in_out_s, attr[i].type, prefix_s, attr[i].name,
-                           suffix_s);
+        mstring_append_fmt(out, "flat %s %s %s%s%s;\n", in_out_s, attr[i].type,
+                           prefix_s, attr[i].name, suffix_s);
     }
 
     return out;

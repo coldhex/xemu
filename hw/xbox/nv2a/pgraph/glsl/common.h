@@ -97,8 +97,7 @@ typedef struct UniformInfo {
 
 #define GLSL_DEFINE(a, b) "#define " stringify(a) " " b "\n"
 
-MString *pgraph_glsl_get_vtx_header(MString *out, bool location, bool smooth,
-                                    bool perspective_correct, bool in,
+MString *pgraph_glsl_get_vtx_header(MString *out, bool location, bool in,
                                     bool prefix, bool array);
 
 typedef struct PGRAPHState PGRAPHState;

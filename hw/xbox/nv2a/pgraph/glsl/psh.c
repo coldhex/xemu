@@ -909,10 +909,7 @@ static MString* psh_convert(struct PixelShader *ps)
     bool yuv_to_rgb_in_preflight = false;
 
     MString *preflight = mstring_new();
-    pgraph_glsl_get_vtx_header(preflight, ps->opts.vulkan,
-                             ps->state->smooth_shading,
-                             ps->state->texture_perspective, true, false,
-                             false);
+    pgraph_glsl_get_vtx_header(preflight, ps->opts.vulkan, true, false, false);
 
     if (ps->opts.vulkan) {
         mstring_append_fmt(
@@ -1072,55 +1069,48 @@ static MString* psh_convert(struct PixelShader *ps)
                              "}\n");
     }
 
+    MString *vars = mstring_new();
+
+    mstring_append(
+        vars,
+        "vec2 unscaled_xy = gl_FragCoord.xy / surfaceScale;\n"
+        "precise float bc0 = area(unscaled_xy, vtxPos1.xy, vtxPos2.xy);\n"
+        "precise float bc1 = area(unscaled_xy, vtxPos2.xy, vtxPos0.xy);\n"
+        "precise float bc2 = area(unscaled_xy, vtxPos0.xy, vtxPos1.xy);\n"
+        "float sarea = area(vtxPos0.xy, vtxPos1.xy, vtxPos2.xy);\n"
+        "float pbc0 = bc0 / vtxPos0.w;\n"
+        "float pbc1 = bc1 / vtxPos1.w;\n"
+        "float pbc2 = bc2 / vtxPos2.w;\n"
+        // Clamp denominator which can be zero in case the rasterized primitive
+        // is a point or a degenerate line or triangle. Also clamp to prevent
+        // wrap-around through infinity in case of GPU rasterization or
+        // floating-point arithmetic rounding errors.
+        "float pbcsum = pbc0 + pbc1 + pbc2;\n"
+        "pbcsum = sarea < 0.0 ? min(pbcsum, -1e-30) : max(pbcsum, 1e-30);\n"
+        "float inv_pbcsum = 1.0 / pbcsum;\n"
+        "pbc1 *= inv_pbcsum;\n"
+        "pbc2 *= inv_pbcsum;\n"
+        // Clamp denominator which can be zero in case the rasterized primitive
+        // is a point or a degenerate line or triangle.
+        "float bcsum = bc0 + bc1 + bc2;\n"
+        "bcsum = sarea < 0.0 ? min(bcsum, -1e-30) : max(bcsum, 1e-30);\n"
+        "float inv_bcsum = 1.0 / bcsum;\n"
+        "bc1 *= inv_bcsum;\n"
+        "bc2 *= inv_bcsum;\n");
+
     if (ps->state->z_perspective) {
         mstring_append(
             clip,
-            "vec2 unscaled_xy = gl_FragCoord.xy / surfaceScale;\n"
-            "precise float bc0 = area(unscaled_xy, vtxPos1.xy, vtxPos2.xy);\n"
-            "precise float bc1 = area(unscaled_xy, vtxPos2.xy, vtxPos0.xy);\n"
-            "precise float bc2 = area(unscaled_xy, vtxPos0.xy, vtxPos1.xy);\n"
-            "bc0 /= vtxPos0.w;\n"
-            "bc1 /= vtxPos1.w;\n"
-            "bc2 /= vtxPos2.w;\n"
-            "float inv_bcsum = 1.0 / (bc0 + bc1 + bc2);\n"
-            // Denominator can be zero in case the rasterized primitive is a
-            // point or a degenerate line or triangle.
-            "if (isinf(inv_bcsum)) {\n"
-            "  inv_bcsum = 0.0;\n"
-            "}\n"
-            "bc1 *= inv_bcsum;\n"
-            "bc2 *= inv_bcsum;\n"
-            "precise float zvalue = vtxPos0.w + (bc1*(vtxPos1.w - vtxPos0.w) + bc2*(vtxPos2.w - vtxPos0.w));\n"
-            // If GPU clipping is inaccurate, the point gl_FragCoord.xy might
-            // be above the horizon of the plane of a rasterized triangle
-            // making the interpolated w-coordinate above zero or negative. We
-            // should prevent such wrapping through infinity by clamping to
-            // infinity.
-            "if (zvalue > 0.0) {\n"
-            "  float zslopeofs = depthFactor*triMZ*zvalue*zvalue;\n"
-            "  zvalue += depthOffset;\n"
-            "  zvalue += zslopeofs;\n"
-            "} else {\n"
-            "  zvalue = uintBitsToFloat(0x7F7FFFFFu);\n"
-            "}\n"
+            "precise float zvalue = vtxPos0.w + (pbc1*(vtxPos1.w - vtxPos0.w) + pbc2*(vtxPos2.w - vtxPos0.w));\n"
+            "float zslopeofs = depthFactor*triMZ*zvalue*zvalue;\n"
+            "zvalue += depthOffset;\n"
+            "zvalue += zslopeofs;\n"
             "if (isnan(zvalue)) {\n"
             "  zvalue = uintBitsToFloat(0x7F7FFFFFu);\n"
             "}\n");
     } else {
         mstring_append(
             clip,
-            "vec2 unscaled_xy = gl_FragCoord.xy / surfaceScale;\n"
-            "precise float bc0 = area(unscaled_xy, vtxPos1.xy, vtxPos2.xy);\n"
-            "precise float bc1 = area(unscaled_xy, vtxPos2.xy, vtxPos0.xy);\n"
-            "precise float bc2 = area(unscaled_xy, vtxPos0.xy, vtxPos1.xy);\n"
-            "float inv_bcsum = 1.0 / (bc0 + bc1 + bc2);\n"
-            // Denominator can be zero in case the rasterized primitive is a
-            // point or a degenerate line or triangle.
-            "if (isinf(inv_bcsum)) {\n"
-            "  inv_bcsum = 0.0;\n"
-            "}\n"
-            "bc1 *= inv_bcsum;\n"
-            "bc2 *= inv_bcsum;\n"
             "precise float zvalue = vtxPos0.z + (bc1*(vtxPos1.z - vtxPos0.z) + bc2*(vtxPos2.z - vtxPos0.z));\n"
             "zvalue += depthOffset;\n"
             "zvalue += depthFactor*triMZ;\n");
@@ -1145,15 +1135,25 @@ static MString* psh_convert(struct PixelShader *ps)
             "}\n");
     }
 
-    MString *vars = mstring_new();
-    mstring_append(vars, "vec4 pD0 = vtxD0;\n");
-    mstring_append(vars, "vec4 pD1 = vtxD1;\n");
-    mstring_append(vars, "vec4 pB0 = vtxB0;\n");
-    mstring_append(vars, "vec4 pB1 = vtxB1;\n");
-    mstring_append(vars, "vec4 pFog = vec4(fogColor.rgb, clamp(vtxFog, 0.0, 1.0));\n");
-    mstring_append(vars, "vec4 pT0 = vtxT0;\n");
-    mstring_append(vars, "vec4 pT1 = vtxT1;\n");
-    mstring_append(vars, "vec4 pT2 = vtxT2;\n");
+    if (ps->state->texture_perspective) {
+        mstring_append(vars,
+                       "float tbc1 = pbc1;\n"
+                       "float tbc2 = pbc2;\n");
+    } else {
+        mstring_append(vars,
+                       "float tbc1 = bc1;\n"
+                       "float tbc2 = bc2;\n");
+    }
+
+    mstring_append(vars, "precise vec4 pD0 = vtxD00 + (tbc1*(vtxD01 - vtxD00) + tbc2*(vtxD02 - vtxD00));\n");
+    mstring_append(vars, "precise vec4 pD1 = vtxD10 + (tbc1*(vtxD11 - vtxD10) + tbc2*(vtxD12 - vtxD10));\n");
+    mstring_append(vars, "precise vec4 pB0 = vtxB00 + (tbc1*(vtxB01 - vtxB00) + tbc2*(vtxB02 - vtxB00));\n");
+    mstring_append(vars, "precise vec4 pB1 = vtxB10 + (tbc1*(vtxB11 - vtxB10) + tbc2*(vtxB12 - vtxB10));\n");
+    mstring_append(vars, "precise float pFogw = vtxFog0 + (tbc1*(vtxFog1 - vtxFog0) + tbc2*(vtxFog2 - vtxFog0));\n");
+    mstring_append(vars, "vec4 pFog = vec4(fogColor.rgb, clamp(pFogw, 0.0, 1.0));\n");
+    mstring_append(vars, "precise vec4 pT0 = vtxT00 + (tbc1*(vtxT01 - vtxT00) + tbc2*(vtxT02 - vtxT00));\n");
+    mstring_append(vars, "precise vec4 pT1 = vtxT10 + (tbc1*(vtxT11 - vtxT10) + tbc2*(vtxT12 - vtxT10));\n");
+    mstring_append(vars, "precise vec4 pT2 = vtxT20 + (tbc1*(vtxT21 - vtxT20) + tbc2*(vtxT22 - vtxT20));\n");
 
     if (ps->state->biased_tex[0] || ps->state->biased_tex[1] ||
         ps->state->biased_tex[2] || ps->state->biased_tex[3]) {
@@ -1179,7 +1179,7 @@ static MString* psh_convert(struct PixelShader *ps)
         assert(!ps->state->rect_tex[3]);
         mstring_append(vars, "vec4 pT3 = vec4(gl_PointCoord, 1.0, 1.0);\n");
     } else {
-        mstring_append(vars, "vec4 pT3 = vtxT3;\n");
+        mstring_append(vars, "precise vec4 pT3 = vtxT30 + (tbc1*(vtxT31 - vtxT30) + tbc2*(vtxT32 - vtxT30));\n");
         if (ps->state->biased_tex[3]) {
             mstring_append(vars, "pT3 = addTextureBias(pT3);\n");
         }

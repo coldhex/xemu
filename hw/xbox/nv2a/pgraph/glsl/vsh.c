@@ -234,24 +234,41 @@ MString *pgraph_glsl_gen_vsh(const VshState *state, GenVshGlslOptions opts)
         "  return trunc(pos * 16.0f) / 16.0f;\n"
         "}\n");
 
-    pgraph_glsl_get_vtx_header(header, opts.vulkan, state->smooth_shading,
-                               state->texture_perspective, false,
+    pgraph_glsl_get_vtx_header(header, opts.vulkan, false,
                                opts.prefix_outputs, false);
 
     if (opts.prefix_outputs) {
         mstring_append(header,
-                       "#define vtxD0 v_vtxD0\n"
-                       "#define vtxD1 v_vtxD1\n"
-                       "#define vtxB0 v_vtxB0\n"
-                       "#define vtxB1 v_vtxB1\n"
-                       "#define vtxFog v_vtxFog\n"
-                       "#define vtxT0 v_vtxT0\n"
-                       "#define vtxT1 v_vtxT1\n"
-                       "#define vtxT2 v_vtxT2\n"
-                       "#define vtxT3 v_vtxT3\n"
                        "#define vtxPos0 v_vtxPos0\n"
                        "#define vtxPos1 v_vtxPos1\n"
                        "#define vtxPos2 v_vtxPos2\n"
+                       "#define vtxD00 v_vtxD00\n"
+                       "#define vtxD01 v_vtxD01\n"
+                       "#define vtxD02 v_vtxD02\n"
+                       "#define vtxD10 v_vtxD10\n"
+                       "#define vtxD11 v_vtxD11\n"
+                       "#define vtxD12 v_vtxD12\n"
+                       "#define vtxB00 v_vtxB00\n"
+                       "#define vtxB01 v_vtxB01\n"
+                       "#define vtxB02 v_vtxB02\n"
+                       "#define vtxB10 v_vtxB10\n"
+                       "#define vtxB11 v_vtxB11\n"
+                       "#define vtxB12 v_vtxB12\n"
+                       "#define vtxT00 v_vtxT00\n"
+                       "#define vtxT01 v_vtxT01\n"
+                       "#define vtxT02 v_vtxT02\n"
+                       "#define vtxT10 v_vtxT10\n"
+                       "#define vtxT11 v_vtxT11\n"
+                       "#define vtxT12 v_vtxT12\n"
+                       "#define vtxT20 v_vtxT20\n"
+                       "#define vtxT21 v_vtxT21\n"
+                       "#define vtxT22 v_vtxT22\n"
+                       "#define vtxT30 v_vtxT30\n"
+                       "#define vtxT31 v_vtxT31\n"
+                       "#define vtxT32 v_vtxT32\n"
+                       "#define vtxFog0 v_vtxFog0\n"
+                       "#define vtxFog1 v_vtxFog1\n"
+                       "#define vtxFog2 v_vtxFog2\n"
                        "#define triMZ v_triMZ\n"
                        );
     }
@@ -394,24 +411,33 @@ MString *pgraph_glsl_gen_vsh(const VshState *state, GenVshGlslOptions opts)
     }
 
     mstring_append(body, "\n"
-                   "  vtxD0 = clamp(NaNToOne(oD0), 0.0, 1.0);\n"
-                   "  vtxB0 = clamp(NaNToOne(oB0), 0.0, 1.0);\n"
-                   "  vtxFog = oFog.x;\n"
-                   "  vtxT0 = oT0;\n"
-                   "  vtxT1 = oT1;\n"
-                   "  vtxT2 = oT2;\n"
-                   "  vtxT3 = oT3;\n"
-                   "  vtxPos0 = vtxPos;\n"
-                   "  vtxPos1 = vtxPos;\n"
-                   "  vtxPos2 = vtxPos;\n"
+                   "  oPos.xy = roundScreenCoords(oPos.xy);\n"
+                   "  vtxPos0 = oPos;\n"
+                   "  vtxPos1 = oPos;\n"
+                   "  vtxPos2 = oPos;\n"
+                   "  vtxT00 = oT0;\n"
+                   "  vtxT01 = oT0;\n"
+                   "  vtxT02 = oT0;\n"
+                   "  vtxT10 = oT1;\n"
+                   "  vtxT11 = oT1;\n"
+                   "  vtxT12 = oT1;\n"
+                   "  vtxT20 = oT2;\n"
+                   "  vtxT21 = oT2;\n"
+                   "  vtxT22 = oT2;\n"
+                   "  vtxT30 = oT3;\n"
+                   "  vtxT31 = oT3;\n"
+                   "  vtxT32 = oT3;\n"
+                   "  vtxFog0 = oFog.x;\n"
+                   "  vtxFog1 = oFog.x;\n"
+                   "  vtxFog2 = oFog.x;\n"
                    "  triMZ = 0.0;\n"
                    "  gl_PointSize = oPts.x;\n"
     );
 
     if (state->specular_enable) {
         mstring_append(body,
-                       "  vtxD1 = clamp(NaNToOne(oD1), 0.0, 1.0);\n"
-                       "  vtxB1 = clamp(NaNToOne(oB1), 0.0, 1.0);\n"
+                       "  vec4 vtxD1 = clamp(NaNToOne(oD1), 0.0, 1.0);\n"
+                       "  vec4 vtxB1 = clamp(NaNToOne(oB1), 0.0, 1.0);\n"
         );
 
         if (state->ignore_specular_alpha) {
@@ -422,16 +448,50 @@ MString *pgraph_glsl_gen_vsh(const VshState *state, GenVshGlslOptions opts)
         }
     } else {
         mstring_append(body,
-                       "  vtxD1 = vec4(0.0, 0.0, 0.0, 1.0);\n"
-                       "  vtxB1 = vec4(0.0, 0.0, 0.0, 1.0);\n"
+                       "  vec4 vtxD1 = vec4(0.0, 0.0, 0.0, 1.0);\n"
+                       "  vec4 vtxB1 = vec4(0.0, 0.0, 0.0, 1.0);\n"
         );
     }
+
+    mstring_append(
+        body,
+        "  vec4 vtxD0 = clamp(NaNToOne(oD0), 0.0, 1.0);\n"
+        "  vec4 vtxB0 = clamp(NaNToOne(oB0), 0.0, 1.0);\n"
+        "  vtxD00 = vtxD0;\n"
+        "  vtxD01 = vtxD0;\n"
+        "  vtxD02 = vtxD0;\n"
+        "  vtxB00 = vtxB0;\n"
+        "  vtxB01 = vtxB0;\n"
+        "  vtxB02 = vtxB0;\n"
+        "  vtxD10 = vtxD1;\n"
+        "  vtxD11 = vtxD1;\n"
+        "  vtxD12 = vtxD1;\n"
+        "  vtxB10 = vtxB1;\n"
+        "  vtxB11 = vtxB1;\n"
+        "  vtxB12 = vtxB1;\n"
+
+        /* The shaders leave position in screen space, while OpenGL/Vulkan
+         * expects it in clip space.
+         */
+        "  oPos.xy = (2.0f * oPos.xy - surfaceSize) / surfaceSize;\n"
+        "  oPos.z = oPos.z / clipRange.y;\n"
+
+        /* OpenGL/Vulkan will divide by w, but we have already done it. Set w
+         * to 1.0, except preserve its sign so that clipping works.
+         */
+        "  oPos.w = sign(oPos.w);\n"
+        "  oPos.xyz *= oPos.w;\n"
+    );
 
     if (opts.vulkan) {
         mstring_append(body,
                    "  gl_Position = oPos;\n"
         );
     } else {
+        /* z-coordinate doesn't really matter since we are interpolating it
+         * manually using barycentric coordinates anyway. TODO: remove this
+         * else-branch and set gl_Position=oPos like for Vulkan?
+         */
         mstring_append(body,
                    "  gl_Position = vec4(oPos.x, oPos.y, 2.0*oPos.z - oPos.w, oPos.w);\n"
         );
