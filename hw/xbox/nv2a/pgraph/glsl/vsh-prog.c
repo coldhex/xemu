@@ -751,22 +751,6 @@ void pgraph_glsl_gen_vsh_prog(uint16_t version, const uint32_t *tokens,
     assert(has_final);
 
     mstring_append(body,
-        /* The shaders leave the result in screen space, while OpenGL expects it
-         * in clip space.
-         */
-        "  oPos.xy = roundScreenCoords(oPos.xy);\n"
         "  oPos.w = clampAwayZeroInf(oPos.w);\n"
-        "  vec4 vtxPos = oPos;\n"
-        "  oPos.xy = (2.0f * oPos.xy - surfaceSize) / surfaceSize;\n"
-        "  oPos.z = oPos.z / clipRange.y;\n"
-
-        /* Undo perspective divide by w.
-         * Note that games may also have vertex shaders that do
-         * not divide by w (such as 2D-graphics menus or overlays), but since
-         * OpenGL will later on divide by the same w, we get back the same
-         * screen space coordinates (perhaps with some loss of floating point
-         * precision, though.)
-         */
-        "  oPos.xyz *= oPos.w;\n"
     );
 }

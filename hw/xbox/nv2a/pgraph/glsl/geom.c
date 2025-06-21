@@ -119,8 +119,8 @@ MString *pgraph_glsl_gen_geom(const GeomState *state, GenGeomGlslOptions opts)
     enum ShaderPolygonMode polygon_mode = state->polygon_front_mode;
 
     bool need_triz = false;
-    bool need_quadz = false;
-    bool need_linez = false;
+    bool need_reorder = false;
+    bool need_line = false;
     const char *layout_in = NULL;
     const char *layout_out = NULL;
     const char *body = NULL;
@@ -135,7 +135,7 @@ MString *pgraph_glsl_gen_geom(const GeomState *state, GenGeomGlslOptions opts)
     case PRIM_TYPE_LINE_LOOP:
     case PRIM_TYPE_LINE_STRIP:
         provoking_index = state->first_vertex_is_provoking ? "0" : "1";
-        need_linez = true;
+        need_line = true;
         layout_in = "layout(lines) in;\n";
         layout_out = "layout(line_strip, max_vertices = 2) out;\n";
         body = "  emit_line(0, 1, 0.0);\n";
@@ -153,113 +153,112 @@ MString *pgraph_glsl_gen_geom(const GeomState *state, GenGeomGlslOptions opts)
             provoking_index = "v[2]";
         }
         need_triz = true;
+        need_reorder = true;
         layout_in = "layout(triangles) in;\n";
         if (polygon_mode == POLY_MODE_FILL) {
             layout_out = "layout(triangle_strip, max_vertices = 3) out;\n";
-            body = "  mat4 pz = calc_triz(v[0], v[1], v[2]);\n"
-                   "  emit_vertex(v[0], pz);\n"
-                   "  emit_vertex(v[1], pz);\n"
-                   "  emit_vertex(v[2], pz);\n"
+            body = "  float dz = calc_triMZ(v[0], v[1], v[2]);\n"
+                   "  emit_vertex(v[0], v[0], v[1], v[2], dz);\n"
+                   "  emit_vertex(v[1], v[0], v[1], v[2], dz);\n"
+                   "  emit_vertex(v[2], v[0], v[1], v[2], dz);\n"
                    "  EndPrimitive();\n";
         } else if (polygon_mode == POLY_MODE_LINE) {
-            need_linez = true;
+            need_line = true;
             layout_out = "layout(line_strip, max_vertices = 6) out;\n";
-            body = "  float dz = calc_triz(v[0], v[1], v[2])[3].x;\n"
+            body = "  float dz = calc_triMZ(v[0], v[1], v[2]);\n"
                    "  emit_line(v[0], v[1], dz);\n"
                    "  emit_line(v[1], v[2], dz);\n"
                    "  emit_line(v[2], v[0], dz);\n";
         } else {
             assert(polygon_mode == POLY_MODE_POINT);
             layout_out = "layout(points, max_vertices = 3) out;\n";
-            body = "  mat4 pz = calc_triz(v[0], v[1], v[2]);\n"
-                   "  emit_vertex(v[0], mat4(pz[0], pz[0], pz[0], pz[3]));\n"
+            body = "  float dz = calc_triMZ(v[0], v[1], v[2]);\n"
+                   "  emit_vertex(v[0], v[0], v[0], v[0], dz);\n"
                    "  EndPrimitive();\n"
-                   "  emit_vertex(v[1], mat4(pz[1], pz[1], pz[1], pz[3]));\n"
+                   "  emit_vertex(v[1], v[1], v[1], v[1], dz);\n"
                    "  EndPrimitive();\n"
-                   "  emit_vertex(v[2], mat4(pz[2], pz[2], pz[2], pz[3]));\n"
+                   "  emit_vertex(v[2], v[2], v[2], v[2], dz);\n"
                    "  EndPrimitive();\n";
         }
         break;
     case PRIM_TYPE_QUADS:
         provoking_index = "3";
-        need_quadz = true;
+        need_triz = true;
         layout_in = "layout(lines_adjacency) in;\n";
         if (polygon_mode == POLY_MODE_FILL) {
             layout_out = "layout(triangle_strip, max_vertices = 6) out;\n";
-            body = "  mat4 pz, pz2;\n"
-                   "  calc_quadz(0, 1, 2, 3, pz, pz2);\n"
-                   "  emit_vertex(1, pz);\n"
-                   "  emit_vertex(2, pz);\n"
-                   "  emit_vertex(0, pz);\n"
+            body = "  float dz = calc_triMZ(0, 1, 2);\n"
+                   "  emit_vertex(1, 0, 1, 2, dz);\n"
+                   "  emit_vertex(2, 0, 1, 2, dz);\n"
+                   "  emit_vertex(0, 0, 1, 2, dz);\n"
                    "  EndPrimitive();\n"
-                   "  emit_vertex(2, pz2);\n"
-                   "  emit_vertex(3, pz2);\n"
-                   "  emit_vertex(0, pz2);\n"
+                   "  float dz2 = calc_triMZ(0, 2, 3);\n"
+                   "  emit_vertex(2, 0, 2, 3, dz2);\n"
+                   "  emit_vertex(3, 0, 2, 3, dz2);\n"
+                   "  emit_vertex(0, 0, 2, 3, dz2);\n"
                    "  EndPrimitive();\n";
         } else if (polygon_mode == POLY_MODE_LINE) {
-            need_linez = true;
+            need_line = true;
             layout_out = "layout(line_strip, max_vertices = 8) out;\n";
-            body = "  mat4 pz, pzs;\n"
-                   "  calc_quadz(0, 1, 2, 3, pz, pzs);\n"
-                   "  emit_line(0, 1, pz[3].x);\n"
-                   "  emit_line(1, 2, pz[3].x);\n"
-                   "  emit_line(2, 3, pzs[3].x);\n"
-                   "  emit_line(3, 0, pzs[3].x);\n";
+            body = "  float dz = calc_triMZ(0, 1, 2);\n"
+                   "  float dz2 = calc_triMZ(0, 2, 3);\n"
+                   "  emit_line(0, 1, dz);\n"
+                   "  emit_line(1, 2, dz);\n"
+                   "  emit_line(2, 3, dz2);\n"
+                   "  emit_line(3, 0, dz2);\n";
         } else {
             assert(polygon_mode == POLY_MODE_POINT);
             layout_out = "layout(points, max_vertices = 4) out;\n";
-            body = "  mat4 pz, pz2;\n"
-                   "  calc_quadz(0, 1, 2, 3, pz, pz2);\n"
-                   "  emit_vertex(0, mat4(pz[0], pz[0], pz[0], pz[3]));\n"
+            body = "  float dz = calc_triMZ(0, 1, 2);\n"
+                   "  emit_vertex(0, 0, 0, 0, dz);\n"
                    "  EndPrimitive();\n"
-                   "  emit_vertex(1, mat4(pz[1], pz[1], pz[1], pz[3]));\n"
+                   "  emit_vertex(1, 1, 1, 1, dz);\n"
                    "  EndPrimitive();\n"
-                   "  emit_vertex(2, mat4(pz[2], pz[2], pz[2], pz[3]));\n"
+                   "  emit_vertex(2, 2, 2, 2, dz);\n"
                    "  EndPrimitive();\n"
-                   "  emit_vertex(3, mat4(pz2[2], pz2[2], pz2[2], pz2[3]));\n"
+                   "  emit_vertex(3, 3, 3, 3, calc_triMZ(0, 2, 3));\n"
                    "  EndPrimitive();\n";
         }
         break;
     case PRIM_TYPE_QUAD_STRIP:
         provoking_index = "3";
-        need_quadz = true;
+        need_triz = true;
         layout_in = "layout(lines_adjacency) in;\n";
         if (polygon_mode == POLY_MODE_FILL) {
             layout_out = "layout(triangle_strip, max_vertices = 6) out;\n";
             body = "  if ((gl_PrimitiveIDIn & 1) != 0) { return; }\n"
-                   "  mat4 pz, pz2;\n"
-                   "  calc_quadz(2, 0, 1, 3, pz, pz2);\n"
-                   "  emit_vertex(0, pz);\n"
-                   "  emit_vertex(1, pz);\n"
-                   "  emit_vertex(2, pz);\n"
+                   "  float dz = calc_triMZ(2, 0, 1);\n"
+                   "  emit_vertex(0, 2, 0, 1, dz);\n"
+                   "  emit_vertex(1, 2, 0, 1, dz);\n"
+                   "  emit_vertex(2, 2, 0, 1, dz);\n"
                    "  EndPrimitive();\n"
-                   "  emit_vertex(2, pz2);\n"
-                   "  emit_vertex(1, pz2);\n"
-                   "  emit_vertex(3, pz2);\n"
+                   "  float dz2 = calc_triMZ(2, 1, 3);\n"
+                   "  emit_vertex(2, 2, 1, 3, dz2);\n"
+                   "  emit_vertex(1, 2, 1, 3, dz2);\n"
+                   "  emit_vertex(3, 2, 1, 3, dz2);\n"
                    "  EndPrimitive();\n";
         } else if (polygon_mode == POLY_MODE_LINE) {
-            need_linez = true;
+            need_line = true;
             layout_out = "layout(line_strip, max_vertices = 8) out;\n";
             body = "  if ((gl_PrimitiveIDIn & 1) != 0) { return; }\n"
-                   "  mat4 pz, pzs;\n"
-                   "  calc_quadz(2, 0, 1, 3, pz, pzs);\n"
-                   "  emit_line(0, 1, pz[3].x);\n"
-                   "  emit_line(1, 3, pzs[3].x);\n"
-                   "  emit_line(3, 2, pzs[3].x);\n"
-                   "  emit_line(2, 0, pz[3].x);\n";
+                   "  float dz = calc_triMZ(2, 0, 1);\n"
+                   "  float dz2 = calc_triMZ(2, 1, 3);\n"
+                   "  emit_line(0, 1, dz);\n"
+                   "  emit_line(1, 3, dz2);\n"
+                   "  emit_line(3, 2, dz2);\n"
+                   "  emit_line(2, 0, dz);\n";
         } else {
             assert(polygon_mode == POLY_MODE_POINT);
             layout_out = "layout(points, max_vertices = 4) out;\n";
             body = "  if ((gl_PrimitiveIDIn & 1) != 0) { return; }\n"
-                   "  mat4 pz, pz2;\n"
-                   "  calc_quadz(2, 0, 1, 3, pz, pz2);\n"
-                   "  emit_vertex(0, mat4(pz[1], pz[1], pz[1], pz[3]));\n"
+                   "  float dz = calc_triMZ(2, 0, 1);\n"
+                   "  emit_vertex(0, 0, 0, 0, dz);\n"
                    "  EndPrimitive();\n"
-                   "  emit_vertex(1, mat4(pz[2], pz[2], pz[2], pz[3]));\n"
+                   "  emit_vertex(1, 1, 1, 1, dz);\n"
                    "  EndPrimitive();\n"
-                   "  emit_vertex(2, mat4(pz[0], pz[0], pz[0], pz[3]));\n"
+                   "  emit_vertex(2, 2, 2, 2, dz);\n"
                    "  EndPrimitive();\n"
-                   "  emit_vertex(3, mat4(pz2[2], pz2[2], pz2[2], pz2[3]));\n"
+                   "  emit_vertex(3, 3, 3, 3, calc_triMZ(2, 1, 3));\n"
                    "  EndPrimitive();\n";
         }
         break;
@@ -267,16 +266,16 @@ MString *pgraph_glsl_gen_geom(const GeomState *state, GenGeomGlslOptions opts)
         if (polygon_mode == POLY_MODE_FILL) {
             provoking_index = "v[2]";
             need_triz = true;
+            need_reorder = true;
             layout_in = "layout(triangles) in;\n";
             layout_out = "layout(triangle_strip, max_vertices = 3) out;\n";
-            body = "  mat4 pz = calc_triz(v[0], v[1], v[2]);\n"
-                   "  emit_vertex(v[0], pz);\n"
-                   "  emit_vertex(v[1], pz);\n"
-                   "  emit_vertex(v[2], pz);\n"
+            body = "  float dz = calc_triMZ(v[0], v[1], v[2]);\n"
+                   "  emit_vertex(v[0], v[0], v[1], v[2], dz);\n"
+                   "  emit_vertex(v[1], v[0], v[1], v[2], dz);\n"
+                   "  emit_vertex(v[2], v[0], v[1], v[2], dz);\n"
                    "  EndPrimitive();\n";
         } else if (polygon_mode == POLY_MODE_LINE) {
-            provoking_index = "0";
-            need_linez = true;
+            need_line = true;
             /* FIXME: input here is lines and not triangles so we cannot
              * calculate triangle plane slope. Also, the first vertex of the
              * polygon is unavailable so flat shading provoking vertex is
@@ -306,17 +305,24 @@ MString *pgraph_glsl_gen_geom(const GeomState *state, GenGeomGlslOptions opts)
                          "%s"
                          "\n"
                          "#define v_vtxPos v_vtxPos0\n"
+                         "#define v_vtxD0 v_vtxD00\n"
+                         "#define v_vtxD1 v_vtxD10\n"
+                         "#define v_vtxB0 v_vtxB00\n"
+                         "#define v_vtxB1 v_vtxB10\n"
+                         "#define v_vtxT0 v_vtxT00\n"
+                         "#define v_vtxT1 v_vtxT10\n"
+                         "#define v_vtxT2 v_vtxT20\n"
+                         "#define v_vtxT3 v_vtxT30\n"
+                         "#define v_vtxFog v_vtxFog0\n"
                          "\n",
                          opts.vulkan ? 450 : 400, layout_in, layout_out);
-    pgraph_glsl_get_vtx_header(output, opts.vulkan, state->smooth_shading,
-                               state->texture_perspective, true, true, true);
-    pgraph_glsl_get_vtx_header(output, opts.vulkan, state->smooth_shading,
-                               state->texture_perspective, false, false, false);
+    pgraph_glsl_get_vtx_header(output, opts.vulkan, true, true, true);
+    pgraph_glsl_get_vtx_header(output, opts.vulkan, false, false, false);
 
     char vertex_order_buf[80];
     const char *vertex_order_body = "";
 
-    if (need_triz) {
+    if (need_reorder) {
         /* Input triangle absolute vertex order is not guaranteed by OpenGL
          * or Vulkan, only winding order is. Reorder vertices here to first
          * vertex convention which we assumed above when setting
@@ -337,36 +343,84 @@ MString *pgraph_glsl_gen_geom(const GeomState *state, GenGeomGlslOptions opts)
         vertex_order_body = vertex_order_buf;
     }
 
-    if (state->smooth_shading) {
-        provoking_index = "index";
+    if (need_line) {
+        mstring_append(
+            output,
+            "void emit_vertex(int index, int i0, int i1, vec4 pos2, float dz) {\n"
+            "  int i2 = i0;\n"
+            "  vtxPos2 = pos2;\n");
+    } else {
+        mstring_append(
+            output,
+            "void emit_vertex(int index, int i0, int i1, int i2, float dz) {\n"
+            "  vtxPos2 = v_vtxPos[i2];\n");
     }
 
-    mstring_append_fmt(
+    mstring_append(
         output,
-        "void emit_vertex(int index, mat4 pz) {\n"
+        "  vtxPos0 = v_vtxPos[i0];\n"
+        "  vtxPos1 = v_vtxPos[i1];\n"
         "  gl_Position = gl_in[index].gl_Position;\n"
         "  gl_PointSize = gl_in[index].gl_PointSize;\n"
-        "  vtxD0 = v_vtxD0[%s];\n"
-        "  vtxD1 = v_vtxD1[%s];\n"
-        "  vtxB0 = v_vtxB0[%s];\n"
-        "  vtxB1 = v_vtxB1[%s];\n"
-        "  vtxFog = v_vtxFog[index];\n"
-        "  vtxT0 = v_vtxT0[index];\n"
-        "  vtxT1 = v_vtxT1[index];\n"
-        "  vtxT2 = v_vtxT2[index];\n"
-        "  vtxT3 = v_vtxT3[index];\n"
-        "  vtxPos0 = pz[0];\n"
-        "  vtxPos1 = pz[1];\n"
-        "  vtxPos2 = pz[2];\n"
-        "  triMZ = (isnan(pz[3].x) || isinf(pz[3].x)) ? 0.0 : pz[3].x;\n"
-        "  EmitVertex();\n"
-        "}\n",
-        provoking_index,
-        provoking_index,
-        provoking_index,
-        provoking_index);
+        "  vtxT00 = v_vtxT0[i0];\n"
+        "  vtxT01 = v_vtxT0[i1];\n"
+        "  vtxT02 = v_vtxT0[i2];\n"
+        "  vtxT10 = v_vtxT1[i0];\n"
+        "  vtxT11 = v_vtxT1[i1];\n"
+        "  vtxT12 = v_vtxT1[i2];\n"
+        "  vtxT20 = v_vtxT2[i0];\n"
+        "  vtxT21 = v_vtxT2[i1];\n"
+        "  vtxT22 = v_vtxT2[i2];\n"
+        "  vtxT30 = v_vtxT3[i0];\n"
+        "  vtxT31 = v_vtxT3[i1];\n"
+        "  vtxT32 = v_vtxT3[i2];\n"
+        "  vtxFog0 = v_vtxFog[i0];\n"
+        "  vtxFog1 = v_vtxFog[i1];\n"
+        "  vtxFog2 = v_vtxFog[i2];\n"
+        "  triMZ = (isnan(dz) || isinf(dz)) ? 0.0 : dz;\n");
 
-    if (need_triz || need_quadz) {
+    if (state->smooth_shading) {
+        mstring_append(
+            output,
+            "  vtxD00 = v_vtxD0[i0];\n"
+            "  vtxD01 = v_vtxD0[i1];\n"
+            "  vtxD02 = v_vtxD0[i2];\n"
+            "  vtxD10 = v_vtxD1[i0];\n"
+            "  vtxD11 = v_vtxD1[i1];\n"
+            "  vtxD12 = v_vtxD1[i2];\n"
+            "  vtxB00 = v_vtxB0[i0];\n"
+            "  vtxB01 = v_vtxB0[i1];\n"
+            "  vtxB02 = v_vtxB0[i2];\n"
+            "  vtxB10 = v_vtxB1[i0];\n"
+            "  vtxB11 = v_vtxB1[i1];\n"
+            "  vtxB12 = v_vtxB1[i2];\n");
+    } else {
+        mstring_append_fmt(
+            output,
+            "  vtxD00 = v_vtxD0[%s];\n"
+            "  vtxD01 = v_vtxD0[%s];\n"
+            "  vtxD02 = v_vtxD0[%s];\n"
+            "  vtxD10 = v_vtxD1[%s];\n"
+            "  vtxD11 = v_vtxD1[%s];\n"
+            "  vtxD12 = v_vtxD1[%s];\n"
+            "  vtxB00 = v_vtxB0[%s];\n"
+            "  vtxB01 = v_vtxB0[%s];\n"
+            "  vtxB02 = v_vtxB0[%s];\n"
+            "  vtxB10 = v_vtxB1[%s];\n"
+            "  vtxB11 = v_vtxB1[%s];\n"
+            "  vtxB12 = v_vtxB1[%s];\n",
+            provoking_index, provoking_index, provoking_index,
+            provoking_index, provoking_index, provoking_index,
+            provoking_index, provoking_index, provoking_index,
+            provoking_index, provoking_index, provoking_index);
+    }
+
+    mstring_append(
+        output,
+        "  EmitVertex();\n"
+        "}\n");
+
+    if (need_triz) {
         mstring_append(
             output,
             // Kahan's algorithm for computing a*b - c*d using FMA for higher
@@ -387,7 +441,7 @@ MString *pgraph_glsl_gen_geom(const GeomState *state, GenGeomGlslOptions opts)
         if (state->z_perspective) {
             mstring_append(
                 output,
-                "mat4 calc_triz(int i0, int i1, int i2) {\n"
+                "float calc_triMZ(int i0, int i1, int i2) {\n"
                 "  mat2 m = mat2(v_vtxPos[i1].xy - v_vtxPos[i0].xy,\n"
                 "                v_vtxPos[i2].xy - v_vtxPos[i0].xy);\n"
                 "  precise vec2 b = vec2(v_vtxPos[i0].w - v_vtxPos[i1].w,\n"
@@ -398,13 +452,12 @@ MString *pgraph_glsl_gen_geom(const GeomState *state, GenGeomGlslOptions opts)
                 "  float det = kahan_det(m[0].x, m[1].y, m[1].x, m[0].y);\n"
                 "  float dzx = kahan_det(b.x, m[1].y, b.y, m[0].y) / det;\n"
                 "  float dzy = kahan_det(b.y, m[0].x, b.x, m[1].x) / det;\n"
-                "  float dz = max(abs(dzx), abs(dzy));\n"
-                "  return mat4(v_vtxPos[i0], v_vtxPos[i1], v_vtxPos[i2], dz, vec3(0.0));\n"
+                "  return max(abs(dzx), abs(dzy));\n"
                 "}\n");
         } else {
             mstring_append(
                 output,
-                "mat4 calc_triz(int i0, int i1, int i2) {\n"
+                "float calc_triMZ(int i0, int i1, int i2) {\n"
                 "  mat2 m = mat2(v_vtxPos[i1].xy - v_vtxPos[i0].xy,\n"
                 "                v_vtxPos[i2].xy - v_vtxPos[i0].xy);\n"
                 "  precise vec2 b = vec2(v_vtxPos[i1].z - v_vtxPos[i0].z,\n"
@@ -414,13 +467,12 @@ MString *pgraph_glsl_gen_geom(const GeomState *state, GenGeomGlslOptions opts)
                 "  float det = kahan_det(m[0].x, m[1].y, m[1].x, m[0].y);\n"
                 "  float dzx = kahan_det(b.x, m[1].y, b.y, m[0].y) / det;\n"
                 "  float dzy = kahan_det(b.y, m[0].x, b.x, m[1].x) / det;\n"
-                "  float dz = max(abs(dzx), abs(dzy));\n"
-                "  return mat4(v_vtxPos[i0], v_vtxPos[i1], v_vtxPos[i2], dz, vec3(0.0));\n"
+                "  return max(abs(dzx), abs(dzy));\n"
                 "}\n");
         }
     }
 
-    if (need_linez) {
+    if (need_line) {
         mstring_append(
             output,
             // Calculate a third vertex by rotating 90 degrees so that triangle
@@ -428,19 +480,10 @@ MString *pgraph_glsl_gen_geom(const GeomState *state, GenGeomGlslOptions opts)
             "void emit_line(int i0, int i1, float dz) {\n"
             "  vec2 delta = v_vtxPos[i1].xy - v_vtxPos[i0].xy;\n"
             "  vec2 v2 = vec2(-delta.y, delta.x) + v_vtxPos[i0].xy;\n"
-            "  mat4 pz = mat4(v_vtxPos[i0], v_vtxPos[i1], v2, v_vtxPos[i0].zw, dz, vec3(0.0));\n"
-            "  emit_vertex(i0, pz);\n"
-            "  emit_vertex(i1, pz);\n"
+            "  vec4 pos = vec4(v2, v_vtxPos[i0].zw);\n"
+            "  emit_vertex(i0, i0, i1, pos, dz);\n"
+            "  emit_vertex(i1, i0, i1, pos, dz);\n"
             "  EndPrimitive();\n"
-            "}\n");
-    }
-
-    if (need_quadz) {
-        mstring_append(
-            output,
-            "void calc_quadz(int i0, int i1, int i2, int i3, out mat4 triz1, out mat4 triz2) {\n"
-            "  triz1 = calc_triz(i0, i1, i2);\n"
-            "  triz2 = calc_triz(i0, i2, i3);\n"
             "}\n");
     }
 
