@@ -108,16 +108,16 @@ MString *pgraph_glsl_gen_geom(const GeomState *state, GenGeomGlslOptions opts)
         } else if (polygon_mode == POLY_MODE_LINE) {
             need_linez = true;
             layout_out = "layout(line_strip, max_vertices = 4) out;\n";
-            body = "  float triMZ = calc_triz(0, 1, 2)[3].x;\n"
+            body = "  float dz = calc_triz(0, 1, 2)[3].x;\n"
                    "  mat4 pz1 = calc_linez(0, 1);\n"
-                   "  pz1[3].x = triMZ;\n"
+                   "  pz1[3].x = dz;\n"
                    "  mat4 pz2 = calc_linez(1, 2);\n"
-                   "  pz2[3].x = triMZ;\n"
+                   "  pz2[3].x = dz;\n"
                    "  mat4 pz3 = calc_linez(2, 0);\n"
-                   "  pz3[3].x = triMZ;\n"
+                   "  pz3[3].x = dz;\n"
                    "  emit_vertex(0, pz1);\n"
-                   "  emit_vertex(1, pz1);\n"
-                   "  emit_vertex(2, pz2);\n"
+                   "  emit_vertex(1, pz2);\n"
+                   "  emit_vertex(2, pz3);\n"
                    "  emit_vertex(0, pz3);\n"
                    "  EndPrimitive();\n";
         } else {
@@ -159,9 +159,9 @@ MString *pgraph_glsl_gen_geom(const GeomState *state, GenGeomGlslOptions opts)
                    "  mat4 pz4 = calc_linez(3, 0);\n"
                    "  pz4[3].x = pzs[3].x;\n"
                    "  emit_vertex(0, pz1);\n"
-                   "  emit_vertex(1, pz1);\n"
-                   "  emit_vertex(2, pz2);\n"
-                   "  emit_vertex(3, pz3);\n"
+                   "  emit_vertex(1, pz2);\n"
+                   "  emit_vertex(2, pz3);\n"
+                   "  emit_vertex(3, pz4);\n"
                    "  emit_vertex(0, pz4);\n"
                    "  EndPrimitive();\n";
         } else {
@@ -208,9 +208,9 @@ MString *pgraph_glsl_gen_geom(const GeomState *state, GenGeomGlslOptions opts)
                    "  mat4 pz4 = calc_linez(2, 0);\n"
                    "  pz4[3].x = pz[3].x;\n"
                    "  emit_vertex(0, pz1);\n"
-                   "  emit_vertex(1, pz1);\n"
-                   "  emit_vertex(3, pz2);\n"
-                   "  emit_vertex(2, pz3);\n"
+                   "  emit_vertex(1, pz2);\n"
+                   "  emit_vertex(3, pz3);\n"
+                   "  emit_vertex(2, pz4);\n"
                    "  emit_vertex(0, pz4);\n"
                    "  EndPrimitive();\n";
         } else {
@@ -280,6 +280,29 @@ MString *pgraph_glsl_gen_geom(const GeomState *state, GenGeomGlslOptions opts)
                                true, true);
     pgraph_glsl_get_vtx_header(output, opts.vulkan, state->smooth_shading,
                                false, false, false);
+
+    char provoking_index_buf[64];
+    const char *vertex_reorder_body = "";
+
+    if (need_triz && !state->smooth_shading) {
+        /* Input triangle absolute vertex order is not guaranteed by OpenGL
+         * or Vulkan, only winding order is. Reorder vertices here to last
+         * vertex convention which we assumed above when setting
+         * provoking_index. This is only done when flat shading since
+         * absolute order of vtxPos0/1/2 doesn't matter (in principle, but
+         * perhaps we should do that anyway so that there are no floating
+         * point rounding differences between GPUs when computing triMZ
+         * and also depth values in fragment shader?)
+         */
+        mstring_append(output, "ivec3 vind;\n");
+        vertex_reorder_body =
+            "vind = (v_vtxInd[2] > v_vtxInd[0] && v_vtxInd[2] > v_vtxInd[1]) ? ivec3(0, 1, 2) :\n"
+            "       (v_vtxInd[0] > v_vtxInd[1] && v_vtxInd[0] > v_vtxInd[2]) ? ivec3(1, 2, 0) :\n"
+            "       ivec3(2, 0, 1);\n";
+        snprintf(provoking_index_buf, sizeof(provoking_index_buf),
+                 "vind[%s]", provoking_index);
+        provoking_index = provoking_index_buf;
+    }
 
     if (state->smooth_shading) {
         provoking_index = "index";
@@ -393,8 +416,9 @@ MString *pgraph_glsl_gen_geom(const GeomState *state, GenGeomGlslOptions opts)
                        "\n"
                        "void main() {\n"
                        "%s"
+                       "%s"
                        "}\n",
-                       body);
+                       vertex_reorder_body, body);
 
     return output;
 }

@@ -227,6 +227,12 @@ void pgraph_gl_draw_begin(NV2AState *d)
 
     glEnable(GL_DEPTH_CLAMP);
 
+    /* Set first vertex convention to match Vulkan default. This is needed
+     * because geometry shader outputs line strips with data for fragment
+     * shader.
+     */
+    glProvokingVertex(GL_FIRST_VERTEX_CONVENTION);
+
     if (stencil_test) {
         glEnable(GL_STENCIL_TEST);
 
@@ -405,41 +411,8 @@ void pgraph_gl_flush_draw(NV2AState *d)
         assert(pg->inline_buffer_length == 0);
         assert(pg->inline_array_length == 0);
 
-        uint32_t min_element = (uint32_t)-1;
-        uint32_t max_element = 0;
-        for (int i=0; i < pg->inline_elements_length; i++) {
-            max_element = MAX(pg->inline_elements[i], max_element);
-            min_element = MIN(pg->inline_elements[i], min_element);
-        }
-
-        pgraph_gl_bind_vertex_attributes(
-                d, min_element, max_element, false, 0,
-                pg->inline_elements[pg->inline_elements_length - 1]);
-
-        VertexKey k;
-        memset(&k, 0, sizeof(VertexKey));
-        k.count = pg->inline_elements_length;
-        k.gl_type = GL_UNSIGNED_INT;
-        k.gl_normalize = GL_FALSE;
-        k.stride = sizeof(uint32_t);
-        uint64_t h = fast_hash((uint8_t*)pg->inline_elements,
-                               pg->inline_elements_length * 4);
-
-        LruNode *node = lru_lookup(&r->element_cache, h, &k);
-        VertexLruNode *found = container_of(node, VertexLruNode, node);
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, found->gl_buffer);
-        if (!found->initialized) {
-            nv2a_profile_inc_counter(NV2A_PROF_GEOM_BUFFER_UPDATE_4);
-            glBufferData(GL_ELEMENT_ARRAY_BUFFER,
-                         pg->inline_elements_length * 4,
-                         pg->inline_elements, GL_STATIC_DRAW);
-            found->initialized = true;
-        } else {
-            nv2a_profile_inc_counter(NV2A_PROF_GEOM_BUFFER_UPDATE_4_NOTDIRTY);
-        }
-        glDrawElements(r->shader_binding->gl_primitive_mode,
-                       pg->inline_elements_length, GL_UNSIGNED_INT,
-                       (void *)0);
+        unsigned int index_count = pgraph_gl_bind_elements_array(d);
+        glDrawArrays(r->shader_binding->gl_primitive_mode, 0, index_count);
     } else if (pg->inline_buffer_length) {
         NV2A_GL_DPRINTF(false, "Inline Buffer");
         nv2a_profile_inc_counter(NV2A_PROF_INLINE_BUFFERS);

@@ -249,6 +249,7 @@ MString *pgraph_glsl_gen_vsh(const VshState *state, GenVshGlslOptions opts)
                        "#define vtxPos1 v_vtxPos1\n"
                        "#define vtxPos2 v_vtxPos2\n"
                        "#define triMZ v_triMZ\n"
+                       "#define vtxInd v_vtxInd\n"
                        );
     }
     mstring_append(header, "\n");
@@ -431,6 +432,14 @@ MString *pgraph_glsl_gen_vsh(const VshState *state, GenVshGlslOptions opts)
         mstring_append(body,
                    "  gl_Position = vec4(oPos.x, oPos.y, 2.0*oPos.z - oPos.w, oPos.w);\n"
         );
+    }
+
+    if (opts.prefix_outputs) {
+        if (opts.vulkan) {
+            mstring_append(body,  "  vtxInd = gl_VertexIndex;\n");
+        } else {
+            mstring_append(body,  "  vtxInd = gl_VertexID;\n");
+        }
     }
 
     mstring_append(body, "}\n");
