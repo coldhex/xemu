@@ -215,7 +215,7 @@ MString *pgraph_glsl_gen_vsh(const VshState *state, GenVshGlslOptions opts)
         "\n"
         // Clamp to range [2^(-64), 2^64] or [-2^64, -2^(-64)].
         "float clampAwayZeroInf(float t) {\n"
-        "  if (t > 0.0 || floatBitsToUint(t) == 0) {\n"
+        "  if (floatBitsToInt(t) >= 0) {\n"
         "    t = clamp(t, uintBitsToFloat(0x1F800000), uintBitsToFloat(0x5F800000));\n"
         "  } else {\n"
         "    t = clamp(t, uintBitsToFloat(0xDF800000), uintBitsToFloat(0x9F800000));\n"
