@@ -2159,13 +2159,11 @@ void pgraph_vk_flush_draw(NV2AState *d)
                 continue;
             }
 
-            /* FIXME: Double check */
-            offset = ROUND_UP(offset, attr->size);
             attr->inline_array_offset = offset;
             NV2A_DPRINTF("bind inline attribute %d size=%d, count=%d\n", i,
                          attr->size, attr->count);
             offset += attr->size * attr->count;
-            offset = ROUND_UP(offset, attr->size);
+            offset = (offset + 3) & ~3;
         }
 
         unsigned int vertex_size = offset;
