@@ -555,7 +555,7 @@ static void pgraph_method_log(unsigned int subchannel,
     if (method == last) {
         count++;
     } else {
-        count = 0;
+        count = 1;
     }
     last = method;
 }
