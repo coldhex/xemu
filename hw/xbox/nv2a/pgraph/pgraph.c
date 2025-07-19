@@ -2529,6 +2529,20 @@ DEF_METHOD(NV097, SET_BEGIN_END)
         pgraph_reset_inline_buffers(pg);
         pg->primitive_mode = PRIM_TYPE_INVALID;
     } else {
+        if (pg->primitive_mode != PRIM_TYPE_INVALID &&
+            pg->primitive_mode == parameter) {
+            /* The game "Star Wars Jedi Knight: Jedi Academy" sends Begin in the
+             * middle of sending ARRAY_ELEMENT16 values when primitive_mode is
+             * PRIM_TYPE_TRIANGLES, splitting a triangle (e.g. having one vertex
+             * before begin and two after) and even worse, the triangle vertices
+             * after the Begin are then out of sync leading to severe artifacts.
+             * Before the second Begin there are 511 (=0x1FF) ARRAY_ELEMENT16
+             * values so perhaps a new Begin is required by NV2A after that
+             * amount.
+             */
+            NV2A_DPRINTF("Begin without End, same primitive mode!\n");
+            return;
+        }
         if (pg->primitive_mode != PRIM_TYPE_INVALID) {
             NV2A_DPRINTF("Begin without End!\n");
         }
