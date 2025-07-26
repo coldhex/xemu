@@ -104,13 +104,6 @@ static const GLenum pgraph_blend_logicop_map[] = {
 };
 */
 
-static const GLenum pgraph_cull_face_gl_map[] = {
-    0,
-    GL_FRONT,
-    GL_BACK,
-    GL_FRONT_AND_BACK
-};
-
 static const GLenum pgraph_depth_func_gl_map[] = {
     GL_NEVER,
     GL_LESS,

@@ -190,23 +190,9 @@ void pgraph_gl_draw_begin(NV2AState *d)
         glDisable(GL_BLEND);
     }
 
-    /* Face culling */
-    if (pgraph_reg_r(pg, NV_PGRAPH_SETUPRASTER)
-            & NV_PGRAPH_SETUPRASTER_CULLENABLE) {
-        uint32_t cull_face = GET_MASK(pgraph_reg_r(pg, NV_PGRAPH_SETUPRASTER),
-                                      NV_PGRAPH_SETUPRASTER_CULLCTRL);
-        assert(cull_face < ARRAY_SIZE(pgraph_cull_face_gl_map));
-        glCullFace(pgraph_cull_face_gl_map[cull_face]);
-        glEnable(GL_CULL_FACE);
-    } else {
-        glDisable(GL_CULL_FACE);
-    }
-
-    /* Front-face select */
-    /* Winding is reverse here because clip-space y-coordinates are inverted */
-    glFrontFace(pgraph_reg_r(pg, NV_PGRAPH_SETUPRASTER)
-                    & NV_PGRAPH_SETUPRASTER_FRONTFACE
-                        ? GL_CW : GL_CCW);
+    /* Face culling is handled in geometry shader explicitly */
+    glDisable(GL_CULL_FACE);
+    glFrontFace(GL_CW);
 
     /* Polygon offset is handled in geometry and fragment shaders explicitly */
     glDisable(GL_POLYGON_OFFSET_FILL);

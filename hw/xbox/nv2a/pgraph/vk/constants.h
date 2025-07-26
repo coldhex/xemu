@@ -102,13 +102,6 @@ static const GLenum pgraph_blend_logicop_map[] = {
 };
 */
 
-static const VkCullModeFlags pgraph_cull_face_vk_map[] = {
-    0,
-    VK_CULL_MODE_FRONT_BIT,
-    VK_CULL_MODE_BACK_BIT,
-    VK_CULL_MODE_FRONT_AND_BACK,
-};
-
 static const VkCompareOp pgraph_depth_func_vk_map[] = {
     VK_COMPARE_OP_NEVER,
     VK_COMPARE_OP_LESS,

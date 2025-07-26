@@ -34,6 +34,30 @@ void pgraph_glsl_set_geom_state(PGRAPHState *pg, GeomState *state)
         pgraph_reg_r(pg, NV_PGRAPH_SETUPRASTER),
         NV_PGRAPH_SETUPRASTER_BACKFACEMODE);
 
+    if (pgraph_reg_r(pg, NV_PGRAPH_SETUPRASTER)
+        & NV_PGRAPH_SETUPRASTER_CULLENABLE) {
+        state->cull_face = GET_MASK(pgraph_reg_r(pg, NV_PGRAPH_SETUPRASTER),
+                                    NV_PGRAPH_SETUPRASTER_CULLCTRL);
+    } else {
+        state->cull_face = 0;
+    }
+
+    if (pgraph_reg_r(pg, NV_PGRAPH_SETUPRASTER)
+        & NV_PGRAPH_SETUPRASTER_FRONTFACE) {
+        if (state->cull_face == 1) {
+            state->cull_face = 2;
+        } else if (state->cull_face == 2) {
+            state->cull_face = 1;
+        }
+    }
+
+    {
+        unsigned int aa_width = 1, aa_height = 1;
+        pgraph_apply_anti_aliasing_factor(pg, &aa_width, &aa_height);
+        state->surface_width = pg->surface_binding_dim.width / aa_width;
+        state->surface_height = pg->surface_binding_dim.height / aa_height;
+    }
+
     state->texture_perspective = pgraph_reg_r(pg, NV_PGRAPH_CONTROL_3) &
                                  NV_PGRAPH_CONTROL_3_TEXTURE_PERSPECTIVE_ENABLE;
 
@@ -119,6 +143,7 @@ MString *pgraph_glsl_gen_geom(const GeomState *state, GenGeomGlslOptions opts)
     enum ShaderPolygonMode polygon_mode = state->polygon_front_mode;
 
     bool need_triz = false;
+    bool need_rays = false;
     bool need_reorder = false;
     bool need_line = false;
     const char *layout_in = NULL;
@@ -156,12 +181,9 @@ MString *pgraph_glsl_gen_geom(const GeomState *state, GenGeomGlslOptions opts)
         need_reorder = true;
         layout_in = "layout(triangles) in;\n";
         if (polygon_mode == POLY_MODE_FILL) {
-            layout_out = "layout(triangle_strip, max_vertices = 3) out;\n";
-            body = "  float dz = calc_triMZ(v[0], v[1], v[2]);\n"
-                   "  emit_vertex(v[0], v[0], v[1], v[2], dz);\n"
-                   "  emit_vertex(v[1], v[0], v[1], v[2], dz);\n"
-                   "  emit_vertex(v[2], v[0], v[1], v[2], dz);\n"
-                   "  EndPrimitive();\n";
+            need_rays = true;
+            layout_out = "layout(triangle_strip, max_vertices = 6) out;\n";
+            body = "  emit_tri(v[0], v[1], v[2]);\n";
         } else if (polygon_mode == POLY_MODE_LINE) {
             need_line = true;
             layout_out = "layout(line_strip, max_vertices = 6) out;\n";
@@ -186,17 +208,10 @@ MString *pgraph_glsl_gen_geom(const GeomState *state, GenGeomGlslOptions opts)
         need_triz = true;
         layout_in = "layout(lines_adjacency) in;\n";
         if (polygon_mode == POLY_MODE_FILL) {
-            layout_out = "layout(triangle_strip, max_vertices = 6) out;\n";
-            body = "  float dz = calc_triMZ(0, 1, 2);\n"
-                   "  emit_vertex(1, 0, 1, 2, dz);\n"
-                   "  emit_vertex(2, 0, 1, 2, dz);\n"
-                   "  emit_vertex(0, 0, 1, 2, dz);\n"
-                   "  EndPrimitive();\n"
-                   "  float dz2 = calc_triMZ(0, 2, 3);\n"
-                   "  emit_vertex(2, 0, 2, 3, dz2);\n"
-                   "  emit_vertex(3, 0, 2, 3, dz2);\n"
-                   "  emit_vertex(0, 0, 2, 3, dz2);\n"
-                   "  EndPrimitive();\n";
+            need_rays = true;
+            layout_out = "layout(triangle_strip, max_vertices = 12) out;\n";
+            body = "  emit_tri(0, 1, 2);\n"
+                   "  emit_tri(0, 2, 3);\n";
         } else if (polygon_mode == POLY_MODE_LINE) {
             need_line = true;
             layout_out = "layout(line_strip, max_vertices = 8) out;\n";
@@ -225,18 +240,11 @@ MString *pgraph_glsl_gen_geom(const GeomState *state, GenGeomGlslOptions opts)
         need_triz = true;
         layout_in = "layout(lines_adjacency) in;\n";
         if (polygon_mode == POLY_MODE_FILL) {
-            layout_out = "layout(triangle_strip, max_vertices = 6) out;\n";
+            need_rays = true;
+            layout_out = "layout(triangle_strip, max_vertices = 12) out;\n";
             body = "  if ((gl_PrimitiveIDIn & 1) != 0) { return; }\n"
-                   "  float dz = calc_triMZ(2, 0, 1);\n"
-                   "  emit_vertex(0, 2, 0, 1, dz);\n"
-                   "  emit_vertex(1, 2, 0, 1, dz);\n"
-                   "  emit_vertex(2, 2, 0, 1, dz);\n"
-                   "  EndPrimitive();\n"
-                   "  float dz2 = calc_triMZ(2, 1, 3);\n"
-                   "  emit_vertex(2, 2, 1, 3, dz2);\n"
-                   "  emit_vertex(1, 2, 1, 3, dz2);\n"
-                   "  emit_vertex(3, 2, 1, 3, dz2);\n"
-                   "  EndPrimitive();\n";
+                   "  emit_tri(2, 0, 1);\n"
+                   "  emit_tri(2, 1, 3);\n";
         } else if (polygon_mode == POLY_MODE_LINE) {
             need_line = true;
             layout_out = "layout(line_strip, max_vertices = 8) out;\n";
@@ -267,13 +275,10 @@ MString *pgraph_glsl_gen_geom(const GeomState *state, GenGeomGlslOptions opts)
             provoking_index = "v[2]";
             need_triz = true;
             need_reorder = true;
+            need_rays = true;
             layout_in = "layout(triangles) in;\n";
-            layout_out = "layout(triangle_strip, max_vertices = 3) out;\n";
-            body = "  float dz = calc_triMZ(v[0], v[1], v[2]);\n"
-                   "  emit_vertex(v[0], v[0], v[1], v[2], dz);\n"
-                   "  emit_vertex(v[1], v[0], v[1], v[2], dz);\n"
-                   "  emit_vertex(v[2], v[0], v[1], v[2], dz);\n"
-                   "  EndPrimitive();\n";
+            layout_out = "layout(triangle_strip, max_vertices = 6) out;\n";
+            body = "  emit_tri(v[0], v[1], v[2]);\n";
         } else if (polygon_mode == POLY_MODE_LINE) {
             need_line = true;
             /* FIXME: input here is lines and not triangles so we cannot
@@ -359,9 +364,19 @@ MString *pgraph_glsl_gen_geom(const GeomState *state, GenGeomGlslOptions opts)
     mstring_append(
         output,
         "  vtxPos0 = v_vtxPos[i0];\n"
-        "  vtxPos1 = v_vtxPos[i1];\n"
-        "  gl_Position = gl_in[index].gl_Position;\n"
-        "  gl_PointSize = gl_in[index].gl_PointSize;\n"
+        "  vtxPos1 = v_vtxPos[i1];\n");
+    if (need_rays) {
+        mstring_append(
+            output,
+            "  gl_PointSize = 1.0;\n");
+    } else {
+        mstring_append(
+            output,
+            "  gl_Position = gl_in[index].gl_Position;\n"
+            "  gl_PointSize = gl_in[index].gl_PointSize;\n");
+    }
+    mstring_append(
+        output,
         "  vtxT00 = v_vtxT0[i0];\n"
         "  vtxT01 = v_vtxT0[i1];\n"
         "  vtxT02 = v_vtxT0[i2];\n"
@@ -431,10 +446,10 @@ MString *pgraph_glsl_gen_geom(const GeomState *state, GenGeomGlslOptions opts)
             // Further analysis of Kahan's algorithm for the accurate
             // computation of 2x2 determinants,
             // Mathematics of Computation 82(284), October 2013.
-            "float kahan_det(float a, float b, float c, float d) {\n"
-            "  precise float cd = c*d;\n"
-            "  precise float err = fma(-c, d, cd);\n"
-            "  precise float res = fma(a, b, -cd) + err;\n"
+            "float kahan_det(vec2 a, vec2 b) {\n"
+            "  precise float cd = a.y*b.x;\n"
+            "  precise float err = fma(-a.y, b.x, cd);\n"
+            "  precise float res = fma(a.x, b.y, -cd) + err;\n"
             "  return res;\n"
             "}\n");
 
@@ -449,9 +464,9 @@ MString *pgraph_glsl_gen_geom(const GeomState *state, GenGeomGlslOptions opts)
                 "  b /= vec2(v_vtxPos[i1].w, v_vtxPos[i2].w) * v_vtxPos[i0].w;\n"
                 // The following computes dzx and dzy same as
                 // vec2 dz = b * inverse(m);
-                "  float det = kahan_det(m[0].x, m[1].y, m[1].x, m[0].y);\n"
-                "  float dzx = kahan_det(b.x, m[1].y, b.y, m[0].y) / det;\n"
-                "  float dzy = kahan_det(b.y, m[0].x, b.x, m[1].x) / det;\n"
+                "  float det = kahan_det(m[0], m[1]);\n"
+                "  float dzx = kahan_det(b, vec2(m[0].y, m[1].y)) / det;\n"
+                "  float dzy = kahan_det(vec2(m[0].x, m[1].x), b) / det;\n"
                 "  return max(abs(dzx), abs(dzy));\n"
                 "}\n");
         } else {
@@ -464,9 +479,9 @@ MString *pgraph_glsl_gen_geom(const GeomState *state, GenGeomGlslOptions opts)
                 "                        v_vtxPos[i2].z - v_vtxPos[i0].z);\n"
                 // The following computes dzx and dzy same as
                 // vec2 dz = b * inverse(m);
-                "  float det = kahan_det(m[0].x, m[1].y, m[1].x, m[0].y);\n"
-                "  float dzx = kahan_det(b.x, m[1].y, b.y, m[0].y) / det;\n"
-                "  float dzy = kahan_det(b.y, m[0].x, b.x, m[1].x) / det;\n"
+                "  float det = kahan_det(m[0], m[1]);\n"
+                "  float dzx = kahan_det(b, vec2(m[0].y, m[1].y)) / det;\n"
+                "  float dzy = kahan_det(vec2(m[0].x, m[1].x), b) / det;\n"
                 "  return max(abs(dzx), abs(dzy));\n"
                 "}\n");
         }
@@ -485,6 +500,59 @@ MString *pgraph_glsl_gen_geom(const GeomState *state, GenGeomGlslOptions opts)
             "  emit_vertex(i1, i0, i1, pos, dz);\n"
             "  EndPrimitive();\n"
             "}\n");
+    } else if (need_rays) {
+        mstring_append(
+            output,
+            "void emit_tri(int i0, int i1, int i2) {\n");
+        if (state->cull_face == 1 || state->cull_face == 2) {
+            mstring_append_fmt(
+                output,
+                "  float sarea = kahan_det(v_vtxPos[i1].xy - v_vtxPos[i0].xy, v_vtxPos[i2].xy - v_vtxPos[i0].xy);\n"
+                "  sarea *= sign(v_vtxPos[i0].w)*sign(v_vtxPos[i1].w)*sign(v_vtxPos[i2].w);\n"
+                "  if (!(sarea %c 0.0)) {\n"
+                "    return;\n"
+                "  }\n",
+                state->cull_face == 1 ? '<' : '>');
+        }
+
+        if (state->cull_face != 3) {
+            mstring_append_fmt(
+                output,
+                "  if (!(v_vtxPos[i0].w > 0.0 || v_vtxPos[i1].w > 0.0 || v_vtxPos[i2].w > 0.0)) {\n"
+                "    return;\n"
+                "  }\n"
+                "  vec2 r0 = vec2(-1.0);\n"
+                "  vec2 r1 = vec2(1.0);\n"
+                "  if (v_vtxPos[i0].w > 0.0 && v_vtxPos[i1].w > 0.0 && v_vtxPos[i2].w > 0.0) {\n"
+                "    r0 = (min(min(floor(v_vtxPos[i0].xy), floor(v_vtxPos[i1].xy)), floor(v_vtxPos[i2].xy)) - vec2(%d.0, %d.0)) / vec2(%d.0, %d.0);\n"
+                "    r1 = (max(max(ceil(v_vtxPos[i0].xy), ceil(v_vtxPos[i1].xy)), ceil(v_vtxPos[i2].xy)) - vec2(%d.0, %d.0)) / vec2(%d.0, %d.0);\n"
+                "    r0 = max(r0, -1.0);\n"
+                "    r1 = min(r1, 1.0);\n"
+                "  }\n"
+                "  if (r1.x <= -1.0 || r1.y <= -1.0 || r0.x >= 1.0 || r0.y >= 1.0) {\n"
+                "    return;\n"
+                "  }\n"
+                "  float dz = calc_triMZ(i0, i1, i2);\n"
+                "  gl_Position = vec4(r0.x, r0.y, 0.0, 1.0);\n"
+                "  emit_vertex(0, i0, i1, i2, dz);\n"
+                "  gl_Position = vec4(r0.x, r1.y, 0.0, 1.0);\n"
+                "  emit_vertex(0, i0, i1, i2, dz);\n"
+                "  gl_Position = vec4(r1.x, r1.y, 0.0, 1.0);\n"
+                "  emit_vertex(0, i0, i1, i2, dz);\n"
+                "  EndPrimitive();\n"
+                "  gl_Position = vec4(r0.x, r0.y, 0.0, 1.0);\n"
+                "  emit_vertex(0, i0, i1, i2, dz);\n"
+                "  gl_Position = vec4(r1.x, r1.y, 0.0, 1.0);\n"
+                "  emit_vertex(0, i0, i1, i2, dz);\n"
+                "  gl_Position = vec4(r1.x, r0.y, 0.0, 1.0);\n"
+                "  emit_vertex(0, i0, i1, i2, dz);\n"
+                "  EndPrimitive();\n",
+                state->surface_width / 2, state->surface_height / 2,
+                state->surface_width / 2, state->surface_height / 2,
+                state->surface_width / 2, state->surface_height / 2,
+                state->surface_width / 2, state->surface_height / 2);
+        }
+        mstring_append(output, "}\n");
     }
 
     mstring_append_fmt(output,

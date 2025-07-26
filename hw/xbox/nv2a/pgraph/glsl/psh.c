@@ -1093,10 +1093,24 @@ static MString* psh_convert(struct PixelShader *ps)
         // Clamp denominator which can be zero in case the rasterized primitive
         // is a point or a degenerate line or triangle.
         "float bcsum = bc0 + bc1 + bc2;\n"
-        "bcsum = sarea < 0.0 ? min(bcsum, -1e-30) : max(bcsum, 1e-30);\n"
+//        "bcsum = sarea < 0.0 ? min(bcsum, -1e-30) : max(bcsum, 1e-30);\n"
         "float inv_bcsum = 1.0 / bcsum;\n"
         "bc1 *= inv_bcsum;\n"
         "bc2 *= inv_bcsum;\n");
+
+    mstring_append(
+        clip,
+        "if (abs(bcsum) < 1e-20) {\n"
+        "  discard;\n"
+        "}\n"
+        "bc0 *= inv_bcsum;\n"
+        "float sbc0 = sign(vtxPos0.w)*bc0;\n"
+        "float sbc1 = sign(vtxPos1.w)*bc1;\n"
+        "float sbc2 = sign(vtxPos2.w)*bc2;\n"
+        "if (sbc0 < 0.0 || sbc1 < 0.0 || sbc2 < 0.0) {\n"
+        "  discard;\n"
+        "}\n"
+        );
 
     if (ps->state->z_perspective) {
         mstring_append(

@@ -795,22 +795,11 @@ static void create_pipeline(PGRAPHState *pg)
         .polygonMode = pgraph_polygon_mode_vk_map[r->shader_binding->state
                                                       .geom.polygon_front_mode],
         .lineWidth = 1.0f,
-        .frontFace = (pgraph_reg_r(pg, NV_PGRAPH_SETUPRASTER) &
-                      NV_PGRAPH_SETUPRASTER_FRONTFACE) ?
-                         VK_FRONT_FACE_COUNTER_CLOCKWISE :
-                         VK_FRONT_FACE_CLOCKWISE,
+        .cullMode = VK_CULL_MODE_NONE,
+        .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
         .depthBiasEnable = VK_FALSE,
         .pNext = rasterizer_next_struct,
     };
-
-    if (pgraph_reg_r(pg, NV_PGRAPH_SETUPRASTER) & NV_PGRAPH_SETUPRASTER_CULLENABLE) {
-        uint32_t cull_face = GET_MASK(pgraph_reg_r(pg, NV_PGRAPH_SETUPRASTER),
-                                      NV_PGRAPH_SETUPRASTER_CULLCTRL);
-        assert(cull_face < ARRAY_SIZE(pgraph_cull_face_vk_map));
-        rasterizer.cullMode = pgraph_cull_face_vk_map[cull_face];
-    } else {
-        rasterizer.cullMode = VK_CULL_MODE_NONE;
-    }
 
     VkPipelineMultisampleStateCreateInfo multisampling = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
