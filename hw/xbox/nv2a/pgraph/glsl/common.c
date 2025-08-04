@@ -30,6 +30,7 @@ MString *pgraph_glsl_get_vtx_header(MString *out, bool location, bool in,
 {
     const char *in_out_s = in ? "in" : "out";
     const char *float_s = "float";
+    const char *ivec3_s = "ivec3";
     const char *vec4_s = "vec4";
     const char *prefix_s = prefix ? "v_" : "";
     const char *suffix_s = array ? "[]" : "";
@@ -39,6 +40,10 @@ MString *pgraph_glsl_get_vtx_header(MString *out, bool location, bool in,
         { vec4_s,  "vtxPos0" },
         { vec4_s,  "vtxPos1" },
         { vec4_s,  "vtxPos2" },
+        { ivec3_s, "edge0" },
+        { ivec3_s, "edge1" },
+        { ivec3_s, "edge2" },
+        { float_s, "triMZ"  },
         { vec4_s,  "vtxD00" },
         { vec4_s,  "vtxD01" },
         { vec4_s,  "vtxD02" },
@@ -66,7 +71,6 @@ MString *pgraph_glsl_get_vtx_header(MString *out, bool location, bool in,
         { float_s, "vtxFog0" },
         { float_s, "vtxFog1" },
         { float_s, "vtxFog2" },
-        { float_s, "triMZ"  },
     };
 
     for (int i = 0; i < ARRAY_SIZE(attr); i++) {

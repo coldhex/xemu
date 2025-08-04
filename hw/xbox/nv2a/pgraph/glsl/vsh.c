@@ -270,6 +270,9 @@ MString *pgraph_glsl_gen_vsh(const VshState *state, GenVshGlslOptions opts)
                        "#define vtxFog1 v_vtxFog1\n"
                        "#define vtxFog2 v_vtxFog2\n"
                        "#define triMZ v_triMZ\n"
+                       "#define edge0 v_edge0\n"
+                       "#define edge1 v_edge1\n"
+                       "#define edge2 v_edge2\n"
                        );
     }
     mstring_append(header, "\n");
@@ -431,6 +434,9 @@ MString *pgraph_glsl_gen_vsh(const VshState *state, GenVshGlslOptions opts)
                    "  vtxFog1 = oFog.x;\n"
                    "  vtxFog2 = oFog.x;\n"
                    "  triMZ = 0.0;\n"
+                   "  edge0 = ivec3(0, 0, 1);\n"
+                   "  edge1 = ivec3(0, 0, 1);\n"
+                   "  edge2 = ivec3(0, 0, 1);\n"
                    "  gl_PointSize = oPts.x;\n"
     );
 
