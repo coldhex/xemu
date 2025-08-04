@@ -24,7 +24,8 @@
 
 #define VSH_UBO_BINDING 0
 #define PSH_UBO_BINDING 1
-#define PSH_TEX_BINDING 2
+#define GEOM_UBO_BINDING 2
+#define PSH_TEX_BINDING 3
 
 const size_t MAX_UNIFORM_ATTR_VALUES_SIZE = NV2A_VERTEXSHADER_ATTRIBUTES * 4 * sizeof(float);
 
@@ -37,7 +38,7 @@ static void create_descriptor_pool(PGRAPHState *pg)
     VkDescriptorPoolSize pool_sizes[] = {
         {
             .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-            .descriptorCount = 2 * num_sets,
+            .descriptorCount = 3 * num_sets,
         },
         {
             .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -68,7 +69,7 @@ static void create_descriptor_set_layout(PGRAPHState *pg)
 {
     PGRAPHVkState *r = pg->vk_renderer_state;
 
-    VkDescriptorSetLayoutBinding bindings[2 + NV2A_MAX_TEXTURES];
+    VkDescriptorSetLayoutBinding bindings[3 + NV2A_MAX_TEXTURES];
 
     bindings[0] = (VkDescriptorSetLayoutBinding){
         .binding = VSH_UBO_BINDING,
@@ -82,8 +83,14 @@ static void create_descriptor_set_layout(PGRAPHState *pg)
         .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
         .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
     };
+    bindings[2] = (VkDescriptorSetLayoutBinding){
+        .binding = GEOM_UBO_BINDING,
+        .descriptorCount = 1,
+        .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        .stageFlags = VK_SHADER_STAGE_GEOMETRY_BIT,
+    };
     for (int i = 0; i < NV2A_MAX_TEXTURES; i++) {
-        bindings[2 + i] = (VkDescriptorSetLayoutBinding){
+        bindings[3 + i] = (VkDescriptorSetLayoutBinding){
             .binding = PSH_TEX_BINDING + i,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -152,10 +159,13 @@ void pgraph_vk_update_descriptor_sets(PGRAPHState *pg)
 
     ShaderBinding *binding = r->shader_binding;
     ShaderUniformLayout *layouts[] = { &binding->vsh.module_info->uniforms,
-                                       &binding->psh.module_info->uniforms };
+                                       &binding->psh.module_info->uniforms,
+                                       binding->geom.module_info != NULL ? &binding->geom.module_info->uniforms : NULL };
     VkDeviceSize ubo_buffer_total_size = 0;
     for (int i = 0; i < ARRAY_SIZE(layouts); i++) {
-        ubo_buffer_total_size += layouts[i]->total_size;
+        if (layouts[i]) {
+            ubo_buffer_total_size += layouts[i]->total_size;
+        }
     }
     bool need_ubo_staging_buffer_reset =
         r->uniforms_changed &&
@@ -171,12 +181,15 @@ void pgraph_vk_update_descriptor_sets(PGRAPHState *pg)
         need_uniform_write = true;
     }
 
-    VkWriteDescriptorSet descriptor_writes[2 + NV2A_MAX_TEXTURES];
+    VkWriteDescriptorSet descriptor_writes[3 + NV2A_MAX_TEXTURES];
 
     assert(r->descriptor_set_index < ARRAY_SIZE(r->descriptor_sets));
 
     if (need_uniform_write) {
         for (int i = 0; i < ARRAY_SIZE(layouts); i++) {
+            if (!layouts[i]) {
+                continue;
+            }
             void *data = layouts[i]->allocation;
             VkDeviceSize size = layouts[i]->total_size;
             r->uniform_buffer_offsets[i] = pgraph_vk_append_to_buffer(
@@ -187,17 +200,22 @@ void pgraph_vk_update_descriptor_sets(PGRAPHState *pg)
         r->uniforms_changed = false;
     }
 
-    VkDescriptorBufferInfo ubo_buffer_infos[2];
+    int dindex = 0;
+
+    VkDescriptorBufferInfo ubo_buffer_infos[3];
     for (int i = 0; i < ARRAY_SIZE(layouts); i++) {
+        if (!layouts[i]) {
+            continue;
+        }
         ubo_buffer_infos[i] = (VkDescriptorBufferInfo){
             .buffer = r->storage_buffers[BUFFER_UNIFORM].buffer,
             .offset = r->uniform_buffer_offsets[i],
             .range = layouts[i]->total_size,
         };
-        descriptor_writes[i] = (VkWriteDescriptorSet){
+        descriptor_writes[dindex++] = (VkWriteDescriptorSet){
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstSet = r->descriptor_sets[r->descriptor_set_index],
-            .dstBinding = i == 0 ? VSH_UBO_BINDING : PSH_UBO_BINDING,
+            .dstBinding = i == 0 ? VSH_UBO_BINDING : i == 1 ? PSH_UBO_BINDING : GEOM_UBO_BINDING,
             .dstArrayElement = 0,
             .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
             .descriptorCount = 1,
@@ -212,7 +230,7 @@ void pgraph_vk_update_descriptor_sets(PGRAPHState *pg)
             .imageView = r->texture_bindings[i]->image_view,
             .sampler = r->texture_bindings[i]->sampler,
         };
-        descriptor_writes[2 + i] = (VkWriteDescriptorSet){
+        descriptor_writes[dindex++] = (VkWriteDescriptorSet){
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstSet = r->descriptor_sets[r->descriptor_set_index],
             .dstBinding = PSH_TEX_BINDING + i,
@@ -223,7 +241,7 @@ void pgraph_vk_update_descriptor_sets(PGRAPHState *pg)
         };
     }
 
-    vkUpdateDescriptorSets(r->device, 6, descriptor_writes, 0, NULL);
+    vkUpdateDescriptorSets(r->device, dindex, descriptor_writes, 0, NULL);
 
     r->descriptor_set_index++;
 }
@@ -233,6 +251,12 @@ static void update_shader_uniform_locs(ShaderBinding *binding)
     for (int i = 0; i < ARRAY_SIZE(binding->vsh.uniform_locs); i++) {
         binding->vsh.uniform_locs[i] = uniform_index(
             &binding->vsh.module_info->uniforms, VshUniformInfo[i].name);
+    }
+
+    bool geom_used = binding->geom.module_info != NULL;
+    for (int i = 0; i < ARRAY_SIZE(binding->geom.uniform_locs); i++) {
+        binding->geom.uniform_locs[i] = geom_used ? uniform_index(
+            &binding->geom.module_info->uniforms, GeomUniformInfo[i].name) : -1;
     }
 
     for (int i = 0; i < ARRAY_SIZE(binding->psh.uniform_locs); i++) {
@@ -270,6 +294,7 @@ static void shader_cache_entry_init(Lru *lru, LruNode *node, const void *state)
         key.kind = VK_SHADER_STAGE_GEOMETRY_BIT;
         key.geom.state = binding->state.geom;
         key.geom.glsl_opts.vulkan = true;
+        key.geom.glsl_opts.ubo_binding = GEOM_UBO_BINDING;
         binding->geom.module_info = get_and_ref_shader_module_for_key(r, &key);
     } else {
         binding->geom.module_info = NULL;
@@ -448,7 +473,8 @@ static void update_shader_uniforms(PGRAPHState *pg)
     assert(r->shader_binding);
     ShaderBinding *binding = r->shader_binding;
     ShaderUniformLayout *layouts[] = { &binding->vsh.module_info->uniforms,
-                                       &binding->psh.module_info->uniforms };
+                                       &binding->psh.module_info->uniforms,
+                                       binding->geom.module_info != NULL ? &binding->geom.module_info->uniforms : NULL };
 
     VshUniformValues vsh_values;
     pgraph_glsl_set_vsh_uniform_values(pg, &binding->state.vsh,
@@ -456,6 +482,15 @@ static void update_shader_uniforms(PGRAPHState *pg)
     apply_uniform_updates(&binding->vsh.module_info->uniforms, VshUniformInfo,
                           binding->vsh.uniform_locs, &vsh_values,
                           VshUniform__COUNT);
+
+    if (binding->geom.module_info != NULL) {
+        GeomUniformValues geom_values;
+        pgraph_glsl_set_geom_uniform_values(pg, &binding->state.geom,
+                                            binding->geom.uniform_locs, &geom_values);
+        apply_uniform_updates(&binding->geom.module_info->uniforms, GeomUniformInfo,
+                              binding->geom.uniform_locs, &geom_values,
+                              GeomUniform__COUNT);
+    }
 
     PshUniformValues psh_values;
     pgraph_glsl_set_psh_uniform_values(pg, binding->psh.uniform_locs,
@@ -479,6 +514,10 @@ static void update_shader_uniforms(PGRAPHState *pg)
                           PshUniform__COUNT);
 
     for (int i = 0; i < ARRAY_SIZE(layouts); i++) {
+        if (!layouts[i]) {
+            r->uniform_buffer_hashes[i] = 0;
+            continue;
+        }
         uint64_t hash =
             fast_hash(layouts[i]->allocation, layouts[i]->total_size);
         r->uniforms_changed |= (hash != r->uniform_buffer_hashes[i]);

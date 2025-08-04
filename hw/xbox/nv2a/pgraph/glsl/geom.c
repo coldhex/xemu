@@ -23,6 +23,8 @@
 #include "hw/xbox/nv2a/pgraph/pgraph.h"
 #include "geom.h"
 
+DEF_UNIFORM_INFO_ARR(GeomUniform, GEOM_UNIFORM_DECL_X)
+
 void pgraph_glsl_set_geom_state(PGRAPHState *pg, GeomState *state)
 {
     state->primitive_mode = (enum ShaderPrimitiveMode)pg->primitive_mode;
@@ -49,13 +51,6 @@ void pgraph_glsl_set_geom_state(PGRAPHState *pg, GeomState *state)
         } else if (state->cull_face == 2) {
             state->cull_face = 1;
         }
-    }
-
-    {
-        unsigned int aa_width = 1, aa_height = 1;
-        pgraph_apply_anti_aliasing_factor(pg, &aa_width, &aa_height);
-        state->surface_width = pg->surface_binding_dim.width / aa_width;
-        state->surface_height = pg->surface_binding_dim.height / aa_height;
     }
 
     state->texture_perspective = pgraph_reg_r(pg, NV_PGRAPH_CONTROL_3) &
@@ -324,6 +319,30 @@ MString *pgraph_glsl_gen_geom(const GeomState *state, GenGeomGlslOptions opts)
     pgraph_glsl_get_vtx_header(output, opts.vulkan, true, true, true);
     pgraph_glsl_get_vtx_header(output, opts.vulkan, false, false, false);
 
+    if (opts.vulkan) {
+        mstring_append_fmt(
+            output,
+            "layout(binding = %d, std140) uniform GeomUniforms {\n",
+            opts.ubo_binding);
+    }
+
+    const char *u = opts.vulkan ? "" : "uniform ";
+    for (int i = 0; i < ARRAY_SIZE(GeomUniformInfo); i++) {
+        const UniformInfo *info = &GeomUniformInfo[i];
+        const char *type_str = uniform_element_type_to_str[info->type];
+        if (info->count == 1) {
+            mstring_append_fmt(output, "%s%s %s;\n", u, type_str,
+                               info->name);
+        } else {
+            mstring_append_fmt(output, "%s%s %s[%zd];\n", u, type_str,
+                               info->name, info->count);
+        }
+    }
+
+    if (opts.vulkan) {
+        mstring_append(output, "};\n");
+    }
+
     char vertex_order_buf[80];
     const char *vertex_order_body = "";
 
@@ -549,13 +568,13 @@ MString *pgraph_glsl_gen_geom(const GeomState *state, GenGeomGlslOptions opts)
         }
 
         if (state->cull_face != 3) {
-            mstring_append_fmt(
+            mstring_append(
                 output,
                 "  vec2 r0 = vec2(-1.0);\n"
                 "  vec2 r1 = vec2(1.0);\n"
                 "  if (v_vtxPos[i0].w > 0.0 && v_vtxPos[i1].w > 0.0 && v_vtxPos[i2].w > 0.0) {\n"
-                "    r0 = (min(min(floor(v_vtxPos[i0].xy), floor(v_vtxPos[i1].xy)), floor(v_vtxPos[i2].xy)) - vec2(%d.0, %d.0)) / vec2(%d.0, %d.0);\n"
-                "    r1 = (max(max(ceil(v_vtxPos[i0].xy), ceil(v_vtxPos[i1].xy)), ceil(v_vtxPos[i2].xy)) - vec2(%d.0, %d.0)) / vec2(%d.0, %d.0);\n"
+                "    r0 = (2.0*min(min(floor(v_vtxPos[i0].xy), floor(v_vtxPos[i1].xy)), floor(v_vtxPos[i2].xy)) - surfaceSize) / surfaceSize;\n"
+                "    r1 = (2.0*max(max(ceil(v_vtxPos[i0].xy), ceil(v_vtxPos[i1].xy)), ceil(v_vtxPos[i2].xy)) - surfaceSize) / surfaceSize;\n"
                 "    r0 = max(r0, -1.0);\n"
                 "    r1 = min(r1, 1.0);\n"
                 "  }\n"
@@ -617,11 +636,7 @@ MString *pgraph_glsl_gen_geom(const GeomState *state, GenGeomGlslOptions opts)
                 "  edge1 = e1;\n"
                 "  edge2 = e2;\n"
                 "  emit_vertex(0, i0, i1, i2, dz);\n"
-                "  EndPrimitive();\n",
-                state->surface_width / 2, state->surface_height / 2,
-                state->surface_width / 2, state->surface_height / 2,
-                state->surface_width / 2, state->surface_height / 2,
-                state->surface_width / 2, state->surface_height / 2);
+                "  EndPrimitive();\n");
         }
         mstring_append(output, "}\n");
     }
@@ -635,4 +650,19 @@ MString *pgraph_glsl_gen_geom(const GeomState *state, GenGeomGlslOptions opts)
                        vertex_order_body, body);
 
     return output;
+}
+
+void pgraph_glsl_set_geom_uniform_values(PGRAPHState *pg,
+                                         const GeomState *state,
+                                         const GeomUniformLocs locs,
+                                         GeomUniformValues *values)
+{
+    if (locs[GeomUniform_surfaceSize] != -1) {
+        unsigned int aa_width = 1, aa_height = 1;
+        pgraph_apply_anti_aliasing_factor(pg, &aa_width, &aa_height);
+        float width = (float)pg->surface_binding_dim.width / aa_width;
+        float height = (float)pg->surface_binding_dim.height / aa_height;
+        values->surfaceSize[0][0] = width;
+        values->surfaceSize[0][1] = height;
+    }
 }

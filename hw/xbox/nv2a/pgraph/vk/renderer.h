@@ -189,6 +189,7 @@ typedef struct ShaderBinding {
     } vsh;
     struct {
         ShaderModuleInfo *module_info;
+        GeomUniformLocs uniform_locs;
     } geom;
     struct {
         ShaderModuleInfo *module_info;
@@ -409,8 +410,8 @@ typedef struct PGRAPHVkState {
     ShaderModuleCacheEntry *shader_module_cache_entries;
 
     // FIXME: Merge these into a structure
-    uint64_t uniform_buffer_hashes[2];
-    size_t uniform_buffer_offsets[2];
+    uint64_t uniform_buffer_hashes[3];
+    size_t uniform_buffer_offsets[3];
     bool uniforms_changed;
 
     VkQueryPool query_pool;

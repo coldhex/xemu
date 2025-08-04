@@ -122,6 +122,7 @@ typedef struct ShaderBinding {
 
     struct {
         PshUniformLocs psh;
+        GeomUniformLocs geom;
         VshUniformLocs vsh;
     } uniform_locs;
 } ShaderBinding;

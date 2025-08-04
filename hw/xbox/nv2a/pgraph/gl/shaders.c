@@ -117,6 +117,15 @@ static void update_shader_uniform_locs(ShaderBinding *binding)
         binding->uniform_locs.vsh[i] = glGetUniformLocation(binding->gl_program, name);
     }
 
+    for (int i = 0; i < ARRAY_SIZE(binding->uniform_locs.geom); i++) {
+        const char *name = GeomUniformInfo[i].name;
+        if (GeomUniformInfo[i].count > 1) {
+            snprintf(tmp, sizeof(tmp), "%s[0]", name);
+            name = tmp;
+        }
+        binding->uniform_locs.geom[i] = glGetUniformLocation(binding->gl_program, name);
+    }
+
     for (int i = 0; i < ARRAY_SIZE(binding->uniform_locs.psh); i++) {
         const char *name = PshUniformInfo[i].name;
         if (PshUniformInfo[i].count > 1) {
@@ -741,6 +750,12 @@ static void update_shader_uniforms(PGRAPHState *pg, ShaderBinding *binding)
                                   binding->uniform_locs.vsh, &vsh_values);
     apply_uniform_updates(VshUniformInfo, binding->uniform_locs.vsh,
                           &vsh_values, VshUniform__COUNT);
+
+    GeomUniformValues geom_values;
+    pgraph_glsl_set_geom_uniform_values(pg, &binding->state.geom,
+                                        binding->uniform_locs.geom, &geom_values);
+    apply_uniform_updates(GeomUniformInfo, binding->uniform_locs.geom,
+                          &geom_values, GeomUniform__COUNT);
 
     PshUniformValues psh_values;
     pgraph_glsl_set_psh_uniform_values(pg, binding->uniform_locs.psh, &psh_values);

@@ -30,8 +30,6 @@ typedef struct {
     enum ShaderPolygonMode polygon_front_mode;
     enum ShaderPolygonMode polygon_back_mode;
     short cull_face;
-    int surface_width;
-    int surface_height;
     bool texture_perspective;
     bool smooth_shading;
     bool first_vertex_is_provoking;
@@ -40,8 +38,14 @@ typedef struct {
     short tri_rot1;
 } GeomState;
 
+#define GEOM_UNIFORM_DECL_X(S, DECL) \
+    DECL(S, surfaceSize, vec2, 1)
+
+DECL_UNIFORM_TYPES(GeomUniform, GEOM_UNIFORM_DECL_X)
+
 typedef struct GenGeomGlslOptions {
     bool vulkan;
+    int ubo_binding;
 } GenGeomGlslOptions;
 
 void pgraph_glsl_set_geom_state(PGRAPHState *pg, GeomState *geom);
@@ -49,5 +53,10 @@ void pgraph_glsl_set_geom_state(PGRAPHState *pg, GeomState *geom);
 bool pgraph_glsl_need_geom(const GeomState *state);
 
 MString *pgraph_glsl_gen_geom(const GeomState *state, GenGeomGlslOptions opts);
+
+void pgraph_glsl_set_geom_uniform_values(PGRAPHState *pg,
+                                         const GeomState *state,
+                                         const GeomUniformLocs locs,
+                                         GeomUniformValues *values);
 
 #endif
